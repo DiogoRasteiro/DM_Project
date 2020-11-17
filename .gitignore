@@ -1,0 +1,5 @@
+# Data Files
+*.csv
+data/*
+data_/*
+data/donors.csv
