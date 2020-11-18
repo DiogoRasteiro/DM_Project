@@ -6,3 +6,5 @@ data/donors.csv
 *.html
 *.ipynb
 .ipynb_checkpoints/*
+*.ipynb
+*.ipynb

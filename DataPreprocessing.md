@@ -77,10 +77,7 @@ features_to_delete = [
 ]
 data.drop(features_to_delete, axis=1)
 ```
-<<<<<<< HEAD
 
 ```python
-print('Jupytext')
+print('Stuff')
 ```
-=======
->>>>>>> 2bec5cb0867b34850fca8c7a1c4c58e2efb44369
