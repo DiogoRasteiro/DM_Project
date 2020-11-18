@@ -4,4 +4,8 @@ data/*
 data_/*
 data/donors.csv
 *.html
+<<<<<<< HEAD
 *.ipynb
+=======
+*.ipynb
+>>>>>>> 2bec5cb0867b34850fca8c7a1c4c58e2efb44369
