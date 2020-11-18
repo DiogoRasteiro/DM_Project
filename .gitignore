@@ -4,3 +4,4 @@ data/*
 data_/*
 data/donors.csv
 *.html
+*.ipynb
