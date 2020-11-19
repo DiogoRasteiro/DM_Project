@@ -77,7 +77,9 @@ features_to_delete = [
 ]
 data.drop(features_to_delete, axis=1)
 ```
-
 ```python
-print('Stuff')
+drops = ""
+for i in range(2, 25):
+    drops = drops + f"\'ADATE_{i}\',"
+drops
 ```
