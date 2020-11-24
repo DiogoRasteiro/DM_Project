@@ -24,6 +24,7 @@ from sklearn.cluster import KMeans
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 from pandas_profiling import ProfileReport
+from datetime import datetime
 ```
 
 ```python
@@ -77,12 +78,18 @@ for i in range(3, 25):
 ```
 
 ```python
-data['DIF_12'].isna().sum()
+data['DIF_12']
 ```
 
 ```python
 difcol=[True if 'DIF_' in column else False for column in data.columns]
 data['AVG_DIF']=data.loc[:,difcol].mean(axis=1)
+
+```
+
+```python
+difcol=[True if 'DIF_' in column else False for column in data.columns]
+data.drop(data.loc[:,difcol].columns, inplace=True, axis=1)
 ```
 
 ```python
@@ -96,6 +103,7 @@ data['AVG_AMNT']
 
 ```python
 features_to_delete = [
+    'Unnamed: 0',
     'OSOURCE', # Does not contain information pertaining to the Donor's characteristics
     'TCODE', # Title does not contain information
     'MAILCODE', # Does not help characterize a donor
@@ -116,7 +124,8 @@ features_to_delete = [
     'RDATE_14','RDATE_15','RDATE_16','RDATE_17','RDATE_18','RDATE_19','RDATE_20','RDATE_21','RDATE_22','RDATE_23','RDATE_24',
     'RAMNT_3' ,'RAMNT_4' ,'RAMNT_5' ,'RAMNT_6' ,'RAMNT_7' ,'RAMNT_8' ,'RAMNT_9' ,'RAMNT_10' ,'RAMNT_11' ,'RAMNT_12' ,
     'RAMNT_13' ,'RAMNT_14' ,'RAMNT_15' ,'RAMNT_16' ,'RAMNT_17' ,'RAMNT_18' ,'RAMNT_19' ,'RAMNT_20' ,'RAMNT_21' ,
-    'RAMNT_22' ,'RAMNT_23' ,'RAMNT_24'
+    'RAMNT_22' ,'RAMNT_23' ,'RAMNT_24',
+    
 ]
 
 data.drop(features_to_delete,inplace=True, axis=1)
@@ -137,15 +146,12 @@ upper_tri = cor_matrix.where(np.triu(np.ones(cor_matrix.shape),k=1).astype(np.bo
 ```
 
 ```python
-to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > 0.8)]
+to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > 0.90)]
+len(to_drop)
 ```
 
 ```python
-data.drop(columns=to_drop, inplace=True ,axis=1)
-```
-
-```python
-data.columns.to_list()
+data.drop(columns=to_drop,inplace=True,axis=1)
 ```
 
 ```python
@@ -161,7 +167,23 @@ sns.histplot(data['NUMCHLD'])
 ```
 
 ```python
-data=data.loc[:, data.isnull().mean() <= .1]
+data.loc[:, data.isnull().mean() <= .1].columns.to_list()
+```
+
+```python
+data['ODATE']=data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
+```
+
+```python
+data['ODATE']=data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
+```
+
+```python
+data['LASTDATE'].value_counts()
+```
+
+```python
+data[['ODATEDW','FISTDATE']]
 ```
 
 ```python
