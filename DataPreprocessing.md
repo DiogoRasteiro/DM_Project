@@ -163,7 +163,6 @@ perc_gender.plot(kind='pie', colors=['fuchsia','royalblue','forestgreen','black'
 
 ```python
 sns.histplot(data['NUMCHLD'])
-
 ```
 
 ```python
@@ -171,21 +170,15 @@ data.loc[:, data.isnull().mean() <= .1].columns.to_list()
 ```
 
 ```python
-data['ODATE']=data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
+data['ODATE'] = data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
+data['LASTDATE_DAYS'] = data['LASTDATE'].apply(lambda x: (datetime.now()-x).days)
+data['FISTDATE_DAYS'] = data['FISTDATE'].apply(lambda x: (datetime.now()-x).days)
 ```
 
 ```python
-data['ODATE']=data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
+data[['ODATE','FISTDATE_DAYS', 'LASTDATE_DAYS']]
 ```
 
 ```python
-data['LASTDATE'].value_counts()
-```
-
-```python
-data[['ODATEDW','FISTDATE']]
-```
-
-```python
-
+data_backup[['ODATEDW', 'FISTDATE', 'LASTDATE']]
 ```
