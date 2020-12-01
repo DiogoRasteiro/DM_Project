@@ -44,10 +44,6 @@ data=data_backup.copy()
 ```
 
 ```python
-sample=data.sample(frac=0.01)
-```
-
-```python
 #profile = ProfileReport(
  #   data, 
   #  title='Tugas Customer Data',
@@ -65,6 +61,8 @@ sample=data.sample(frac=0.01)
 #profile.to_file(os.path.join('.', "donor_data.html"))
 ```
 
+# Feature Extraction
+
 ```python
 datetimecol=[True if 'DATE' in column else False for column in data.columns]
 for col in data.loc[:, datetimecol].columns:
@@ -78,13 +76,8 @@ for i in range(3, 25):
 ```
 
 ```python
-data['DIF_12']
-```
-
-```python
 difcol=[True if 'DIF_' in column else False for column in data.columns]
 data['AVG_DIF']=data.loc[:,difcol].mean(axis=1)
-
 ```
 
 ```python
@@ -93,13 +86,31 @@ data.drop(data.loc[:,difcol].columns, inplace=True, axis=1)
 ```
 
 ```python
+data['ODATE'] = data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
+data['LASTDATE_DAYS'] = data['LASTDATE'].apply(lambda x: (datetime.now()-x).days)
+data['FISTDATE_DAYS'] = data['FISTDATE'].apply(lambda x: (datetime.now()-x).days)
+data['MAXRDATE_DAYS'] = data['MAXRDATE'].apply(lambda x: (datetime.now()-x).days)
+data['NEXTDATE_DIF'] = data['FISTDATE'] - data['NEXTDATE']
+```
+
+```python
 AMNTcol=[True if 'RAMNT_' in column else False for column in data.columns]
 data['AVG_AMNT']=data.loc[:,AMNTcol].mean(axis=1)
 ```
 
 ```python
-data['AVG_AMNT']
+data['HAS_LIMIT_SOLIH'] = data['SOLIH'].apply(lambda x: 1 if float(x)>=0 else 0)
 ```
+
+```python
+data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTALL']
+```
+
+```python
+data['DAYS_PER_GIFT']
+```
+
+# Data Cleaning and Missing Values Treatment
 
 ```python
 features_to_delete = [
@@ -115,7 +126,11 @@ features_to_delete = [
     'GEOCODE', # Not pertinent
     'HPHONE_D', 
     'CONTROLN',
-    'MDMAUD', #ALREADY HAVE VARIABLES THAT KEEP THE INDIVIDUAL BYTES OF THIS VAR
+    'MSA',
+    'ADI',
+    'DMA',
+    'MDMAUD',#ALREADY HAVE VARIABLES THAT KEEP THE INDIVIDUAL BYTES OF THIS VAR
+    'RFA_2R',
     'RFA_2','RFA_3','RFA_4','RFA_5','RFA_6','RFA_7','RFA_8','RFA_9','RFA_10','RFA_11','RFA_12','RFA_13','RFA_14','RFA_15',
     'RFA_16','RFA_17','RFA_18','RFA_19','RFA_20','RFA_21','RFA_22','RFA_23','RFA_24',
     'ADATE_2','ADATE_3','ADATE_4','ADATE_5','ADATE_6','ADATE_7','ADATE_8','ADATE_9','ADATE_10','ADATE_11','ADATE_12','ADATE_13',
@@ -125,17 +140,68 @@ features_to_delete = [
     'RAMNT_3' ,'RAMNT_4' ,'RAMNT_5' ,'RAMNT_6' ,'RAMNT_7' ,'RAMNT_8' ,'RAMNT_9' ,'RAMNT_10' ,'RAMNT_11' ,'RAMNT_12' ,
     'RAMNT_13' ,'RAMNT_14' ,'RAMNT_15' ,'RAMNT_16' ,'RAMNT_17' ,'RAMNT_18' ,'RAMNT_19' ,'RAMNT_20' ,'RAMNT_21' ,
     'RAMNT_22' ,'RAMNT_23' ,'RAMNT_24',
+    'FISTDATE',
+    'LASTDATE',
+    'MINRDATE',
+    'MAXRDATE',
+    'NEXTDATE'
     
 ]
 
 data.drop(features_to_delete,inplace=True, axis=1)
 ```
 ```python
-data['RFA_2R'].value_counts()
+flag_col=[]
+for col in data.columns:
+    if len(data[col].unique())<=2:
+        flag_col.append(col)
 ```
+
 ```python
-data['MDMAUD_R'].value_counts()
+for col in flag_col:
+    data[col]=data[col].apply(lambda x: 1 if x in ['X', 'Y', 'H']  else 0)
 ```
+
+```python
+data=data.apply(lambda x: x.replace(' ',np.nan ))
+```
+
+```python
+numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
+
+metric_feat = data.select_dtypes(include=numerics).columns
+```
+
+```python
+non_metric_feat = data.columns.drop(metric_feat).to_list()
+```
+
+```python
+data[non_metric_feat]
+```
+
+```python
+data['SOLIH'].value_counts()
+```
+
+```python
+
+```
+
+```python
+data=data.loc[:, data.isnull().mean() <= .1]
+```
+
+```python
+data['GEOCODE2'].value_counts()
+```
+
+```python
+data['GEOCODE2'].fillna('Other', inplace=True)
+data['GEOCODE2'].replace(' ', 'Other', inplace=True)
+```
+
+# Correlation Analysis
 
 ```python
 cor_matrix=data.corr(method='spearman').abs()
@@ -147,12 +213,14 @@ upper_tri = cor_matrix.where(np.triu(np.ones(cor_matrix.shape),k=1).astype(np.bo
 
 ```python
 to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > 0.90)]
-len(to_drop)
+
 ```
 
 ```python
 data.drop(columns=to_drop,inplace=True,axis=1)
 ```
+
+## Population Characteristics
 
 ```python
 sns.set_theme(style="darkgrid")
@@ -166,19 +234,34 @@ sns.histplot(data['NUMCHLD'])
 ```
 
 ```python
-data.loc[:, data.isnull().mean() <= .1].columns.to_list()
+%matplotlib inline
+plt.figure(figsize=(10,5))
+maxrdate_month=data['MAXRDATE'].apply(lambda x: x.month)
+maxrdate_month.value_counts().plot(kind='bar', color='b')
+
 ```
 
 ```python
-data['ODATE'] = data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
-data['LASTDATE_DAYS'] = data['LASTDATE'].apply(lambda x: (datetime.now()-x).days)
-data['FISTDATE_DAYS'] = data['FISTDATE'].apply(lambda x: (datetime.now()-x).days)
+%matplotlib inline
+plt.figure(figsize=(10,5))
+maxrdate_month=data['MINRDATE'].apply(lambda x: x.month)
+maxrdate_month.value_counts().plot(kind='bar', color='b')
 ```
 
 ```python
-data[['ODATE','FISTDATE_DAYS', 'LASTDATE_DAYS']]
+%matplotlib inline
+plt.figure(figsize=(10,5))
+maxrdate_month=data['FISTDATE'].apply(lambda x: x.month)
+maxrdate_month.value_counts().plot(kind='bar', color='b')
 ```
 
 ```python
-data_backup[['ODATEDW', 'FISTDATE', 'LASTDATE']]
+%matplotlib inline
+plt.figure(figsize=(10,5))
+maxrdate_month=data['LASTDATE'].apply(lambda x: x.month)
+maxrdate_month.value_counts().plot(kind='bar', color='b')
+```
+
+```python
+
 ```
