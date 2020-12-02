@@ -30,7 +30,9 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 from pandas_profiling import ProfileReport
 from datetime import datetime
+
 %matplotlib inline
+pd.set_option('display.max_rows', 350)
 ```
 
 ## Data Importing
@@ -44,14 +46,50 @@ data
 ```
 
 ```python
-data_backup=data.copy()
+data_backup = data.copy()
 ```
 
 ```python
-data=data_backup.copy()
+data = data_backup.copy()
 ```
 
-### Initial Data Transformation
+### Pandas-Profiling Report
+
+
+To get an impression of the dataset in its initial form, we used the library 'pandas-profiling' to automatically generate a report.
+
+```python
+'Generates a Report using pandas-profiling for the dataset at the designated location'
+def generate_profile_report(profile_location):
+    profile = ProfileReport(data,
+                            title='Tugas Customer Data',
+                            correlations={
+                                "pearson": {
+                                    "calculate": True
+                                },
+                                "spearman": {
+                                    "calculate": False
+                                },
+                                "kendall": {
+                                    "calculate": False
+                                },
+                                "phi_k": {
+                                    "calculate": False
+                                },
+                                "cramers": {
+                                    "calculate": False
+                                },
+                            },
+                            minimal=True)
+    profile.to_file(os.path.join('.', profile_location))
+    
+# generate_profile_report('donor_data.html')
+```
+
+### Unnecessary Variables
+
+
+After browsing through the provided metadata and looking at the generated report, we decided the following variables were unnecessary for our analysis, and thus removed them from the dataset. For each one, we provided an explanation as to why.
 
 ```python
 features_to_delete = [
@@ -78,108 +116,107 @@ features_to_delete = [
 
 data.drop(features_to_delete,inplace=True, axis=1)
 ```
+### Initial Data Transformation
+
+
+After browsing the data, we noticed several variables that had a weird format and thus decided to perform some changes to them, in order to get a better quality dataset. This is done at this stage, before a thorough treatment of the data, in order to facilitate treatment or because certain variables would be excluded after.
+
+
 Since there are some columns that are flags(essentially binary) but are represented as categorical variables, we will detect them and change them to a binary column.
 
 ```python
 # Detect all variables that are binary(have only two unique values)
-flag_col=[]
+flag_col = []
 for col in data.columns:
-    if len(data[col].unique())<=2:
+    if len(data[col].unique()) <= 2:
         flag_col.append(col)
+
 # By reading the metadata, we specify 'a priori' the positive values. Then, we specify that they're 1 if they
 # are one of those values and 0 otherwise
 for col in flag_col:
-    data[col]=data[col].apply(lambda x: 1 if x in ['X', 'Y', 'H']  else 0)
+    data[col] = data[col].apply(lambda x: 1 if x in ['X', 'Y', 'H'] else 0)
+```
+
+We noticed that the 'RDATE' series of columns had a lot of NaN values. We assumed this to be because, when a donor does not respond to a campaign, they will be registered as NaN for the 'Response Date'. This means that the 'RDATE's will most certainly be excluded when performing a Missing Values Treatment. However, although there is a lot of missing information in this group of columns, we can also consider the lack of information(donors that didn't respond) to be data itself. Therefore we counted the amount of dates that weren't NaN to obtain the amount of campaigns a donor has responded to.
+
+```python
+# This variable will count the number of times each individual replied to a promotion
+# by counting the amount of 'RDATE's that aren't null
+RDATEcol = [True if 'RDATE_' in column else False for column in data.columns]
+data['NREPLIES'] = data.loc[:, RDATEcol].count(axis=1)
 ```
 
 ### Missing Value Treatment
 
+
+First, through observation of the values and reading the Metadata, we detected several missing values that weren't directly identified as such. Thus, we will fix them.
+
 ```python
-data = data.apply(lambda x: x.replace(' ',np.nan ))
+data = data.apply(lambda x: x.replace(' ', np.nan))
 data['GEOCODE2'].fillna('Other', inplace=True)
 data['GEOCODE2'].replace(' ', 'Other', inplace=True)
 ```
 
-```python
-## this variable will count the number of times each individual replied to a promotion 
-RDATEcol=[True if 'RDATE_' in column else False for column in data.columns]
-data['NREPLIES'] = data.loc[:,RDATEcol].count(axis=1)
-```
+Then, we begin dealing with the missing values themselves. 
+
+Due to the large amount of variables, it is impossible to look at each column individually. Therefore, we decided that any column with a high amount of missing values(over 10% of the observations) should be dropped, because such features don't provide enough information and trying to fill such a large amount of missing values would worsen the data quality too much.
 
 ```python
-data['NREPLIES'].value_counts()
-```
-
-```python
+# Through data.isnull().mean(), we calculate the % of missing values for each column
+# We then alter the dataframe, keeping only those with less than 10% missing values.
 data=data.loc[:, data.isnull().mean() <= .1]
 ```
 
+Finally, with the largest of missing values out of the way, we can deal with the remaining on a case-by-case basis.
+
 ```python
-pd.set_option('display.max_rows',350)
 data.isna().sum().sort_values(ascending=False).to_frame()
 ```
 
+For 'FISTDATE', since there are only 2 rows with missing values, we decided to exclude them since they represent a very small loss in quantity.
+
 ```python
-##removing the 2 rows with missing values in fistdate 
+# Removing the 2 rows with missing values in fistdate
 data = data[~(data.FISTDATE.isna())]
 ```
 
+For the 'ADATE' group, many of them were eliminated. Furthermore, we concluded that the only information we could extract from them was in conjunction with the 'RDATE' group, of which none were kept(although we already extracted information from this group into the 'NREPLIES' variable). Therefore, we exclude them.
+
 ```python
+# Detect all the columns with ADATE in their name and drop them
 ADATEcol=[True if 'ADATE' in column else False for column in data.columns]
 data.drop(data.loc[:,ADATEcol].columns, inplace=True, axis=1)
 ```
+
+For 'GENDER', we will treat the missing values. First, we detected some errors in this column. Namely, 4 observations with values not detailed in the Metadata. Due to this, we changed their value to 'U', in other words, donors whose gender we don't know.
 
 ```python
 data['GENDER'] = data['GENDER'].apply(lambda x: 'U' if x in ['A', 'C', np.nan] else x)
 data['GENDER'].value_counts()
 ```
 
-```python
-data['DOMAIN'].value_counts()
-```
+For 'DOMAIN', we will also impute the missing values.
+
+Since this variable is actually a combination of two characteristics, we decided to split it in two and treat each part separately.
 
 ```python
+# 'DOMAIN' is composed of two bytes, so we simply slice each byte into its own column, while respecting NaNs 
 data['URB_LVL']=data['DOMAIN'].apply(lambda x: str(x)[0] if x is not np.nan else np.nan)
 data['SOCIO_ECO']=data['DOMAIN'].apply(lambda x: str(x)[1] if x is not np.nan else np.nan)
 ```
 
 ```python
-data['URB_LVL'].value_counts()
-```
-
-```python
-data['SOCIO_ECO'].value_counts()
+data[['DOMAIN', 'URB_LVL', 'SOCIO_ECO']]
 ```
 
 ```python
 data.drop(columns='DOMAIN', inplace=True)
 ```
 
-```python
-
-```
-
-### Pandas-Profiling Report
-
-```python
-profile = ProfileReport(
-    data, 
-    title='Tugas Customer Data',
-    correlations={
-        "pearson": {"calculate": True},
-        "spearman": {"calculate": False},
-        "kendall": {"calculate": False},
-        "phi_k": {"calculate": False},
-        "cramers": {"calculate": False},
-    #},minimal=True
-#)
-
-
-
-#profile.to_file(os.path.join('.', "donor_data2.html"))
-```
-
 ## Feature Extraction
+
+
+Here, we will take the features we've kept and try to extract as much information as we can from them, creating new variables.
 
 ```python
 # First we convert all columns involving dates to a datetime format
@@ -228,27 +265,7 @@ data['HAS_LIMIT_SOLP3'] = data['SOLP3'].apply(lambda x: 1 if float(x)>=0 else 0)
 data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTALL']
 ```
 
-```python
-data['ODATE'] = data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
-data['LASTDATE_DAYS'] = data['LASTDATE'].apply(lambda x: (datetime.now()-x).days)
-data['FISTDATE_DAYS'] = data['FISTDATE'].apply(lambda x: (datetime.now()-x).days)
-data['MAXRDATE_DAYS'] = data['MAXRDATE'].apply(lambda x: (datetime.now()-x).days)
-data['NEXTDATE_DIF'] = data['FISTDATE'] - data['NEXTDATE']
-
-# By dividing the time period between First and Last gifts by the total amount of gifts,
-# we obtain the average period between gifts
-data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTALL']
-```
 # Data Cleaning and Missing Values Treatment
-
-```python
-flag_col=[]
-for col in data.columns:
-    if len(data[col].unique())<=2:
-        flag_col.append(col)
-for col in flag_col:
-    data[col]=data[col].apply(lambda x: 1 if x in ['X', 'Y', 'H']  else 0)
-```
 
 ```python
 numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
@@ -262,23 +279,6 @@ non_metric_feat = data.columns.drop(metric_feat).to_list()
 
 ```python
 data[non_metric_feat]
-```
-
-```python
-data['SOLIH'].value_counts()
-```
-
-```python
-data=data.loc[:, data.isnull().mean() <= .1]
-```
-
-```python
-data['GEOCODE2'].value_counts()
-```
-
-```python
-data['GEOCODE2'].fillna('Other', inplace=True)
-data['GEOCODE2'].replace(' ', 'Other', inplace=True)
 ```
 
 # Correlation Analysis
