@@ -13,6 +13,11 @@ jupyter:
     name: python3
 ---
 
+# Donor Segmentation - PVA
+
+
+## Library Importing
+
 ```python
 import os
 import pandas as pd
@@ -25,7 +30,10 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 from pandas_profiling import ProfileReport
 from datetime import datetime
+%matplotlib inline
 ```
+
+## Data Importing
 
 ```python
 data=pd.read_csv('data/donors.csv')
@@ -43,16 +51,47 @@ data_backup=data.copy()
 data=data_backup.copy()
 ```
 
+### Initial Data Transformation
+
+
+Since there are some columns that are flags(essentially binary) but are represented as categorical variables, we will detect them and change them to a binary column.
+
 ```python
-#profile = ProfileReport(
- #   data, 
-  #  title='Tugas Customer Data',
-    #correlations={
-     #   "pearson": {"calculate": True},
-      #  "spearman": {"calculate": False},
-       # "kendall": {"calculate": False},
-        #"phi_k": {"calculate": False},
-        #"cramers": {"calculate": False},
+# Detect all variables that are binary(have only two unique values)
+flag_col=[]
+for col in data.columns:
+    if len(data[col].unique())<=2:
+        flag_col.append(col)
+# By reading the metadata, we specify 'a priori' the positive values. Then, we specify that they're 1 if they
+# are one of those values and 0 otherwise
+for col in flag_col:
+    data[col]=data[col].apply(lambda x: 1 if x in ['X', 'Y', 'H']  else 0)
+```
+
+### Missing Value Treatment
+
+```python
+data = data.apply(lambda x: x.replace(' ',np.nan ))
+data['GEOCODE2'].fillna('Other', inplace=True)
+data['GEOCODE2'].replace(' ', 'Other', inplace=True)
+```
+
+```python
+data=data.loc[:, data.isnull().mean() <= .1]
+```
+
+### Pandas-Profiling Report
+
+```python
+profile = ProfileReport(
+    data, 
+    title='Tugas Customer Data',
+    correlations={
+        "pearson": {"calculate": True},
+        "spearman": {"calculate": False},
+        "kendall": {"calculate": False},
+        "phi_k": {"calculate": False},
+        "cramers": {"calculate": False},
    # },minimal=True
 #)
 
@@ -61,55 +100,60 @@ data=data_backup.copy()
 #profile.to_file(os.path.join('.', "donor_data.html"))
 ```
 
-# Feature Extraction
+## Feature Extraction
 
 ```python
+# First we convert all columns involving dates to a datetime format
 datetimecol=[True if 'DATE' in column else False for column in data.columns]
 for col in data.loc[:, datetimecol].columns:
-    data[col] = data[col].astype('datetime64[ns]')
-```
+    try:
+        data[col] = data[col].astype('datetime64[ns]')
+    except Exception as e:
+        pass
 
-```python
+# Then, for every Promotion, we calculate the difference between receiving the solicitation
+# and answering it
 for i in range(3, 25):
-    data['DIF_' + str(i)] = (data['RDATE_' + str(i)] - data['ADATE_' + str(i)])
-    data['DIF_' + str(i)] = data['DIF_' + str(i)].map(lambda x: x.days)
-```
-
-```python
+    try:
+        data['DIF_' + str(i)] = (data['RDATE_' + str(i)] - data['ADATE_' + str(i)])
+        data['DIF_' + str(i)] = data['DIF_' + str(i)].map(lambda x: x.days)
+    except Exception as e:
+        pass
+    
+# For each promotion the donor responded to, we calculate the average amount of days to respond
 difcol=[True if 'DIF_' in column else False for column in data.columns]
 data['AVG_DIF']=data.loc[:,difcol].mean(axis=1)
-```
 
-```python
+# Afterwards we drop the columns with the differences since we do not need them for further analysis
 difcol=[True if 'DIF_' in column else False for column in data.columns]
 data.drop(data.loc[:,difcol].columns, inplace=True, axis=1)
-```
 
-```python
+# Then we convert several dates to 'Amount of Day since' format
 data['ODATE'] = data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
 data['LASTDATE_DAYS'] = data['LASTDATE'].apply(lambda x: (datetime.now()-x).days)
 data['FISTDATE_DAYS'] = data['FISTDATE'].apply(lambda x: (datetime.now()-x).days)
 data['MAXRDATE_DAYS'] = data['MAXRDATE'].apply(lambda x: (datetime.now()-x).days)
 data['NEXTDATE_DIF'] = data['FISTDATE'] - data['NEXTDATE']
-```
 
-```python
+# Detect all columns regarding amounts given
 AMNTcol=[True if 'RAMNT_' in column else False for column in data.columns]
+# Make an average out of them
 data['AVG_AMNT']=data.loc[:,AMNTcol].mean(axis=1)
-```
 
-```python
+# Detect if the user has a limit for the 'In House' campaign
 data['HAS_LIMIT_SOLIH'] = data['SOLIH'].apply(lambda x: 1 if float(x)>=0 else 0)
+
+# By dividing the time period between First and Last gifts by the total amount of gifts,
+# we obtain the average period between gifts
+data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTALL']
 ```
 
 ```python
 data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTALL']
 ```
-
 ```python
 data['DAYS_PER_GIFT']
 ```
-
 # Data Cleaning and Missing Values Treatment
 
 ```python
@@ -155,15 +199,8 @@ flag_col=[]
 for col in data.columns:
     if len(data[col].unique())<=2:
         flag_col.append(col)
-```
-
-```python
 for col in flag_col:
     data[col]=data[col].apply(lambda x: 1 if x in ['X', 'Y', 'H']  else 0)
-```
-
-```python
-data=data.apply(lambda x: x.replace(' ',np.nan ))
 ```
 
 ```python
@@ -182,10 +219,6 @@ data[non_metric_feat]
 
 ```python
 data['SOLIH'].value_counts()
-```
-
-```python
-
 ```
 
 ```python
@@ -234,7 +267,6 @@ sns.histplot(data['NUMCHLD'])
 ```
 
 ```python
-%matplotlib inline
 plt.figure(figsize=(10,5))
 maxrdate_month=data['MAXRDATE'].apply(lambda x: x.month)
 maxrdate_month.value_counts().plot(kind='bar', color='b')
@@ -242,21 +274,18 @@ maxrdate_month.value_counts().plot(kind='bar', color='b')
 ```
 
 ```python
-%matplotlib inline
 plt.figure(figsize=(10,5))
 maxrdate_month=data['MINRDATE'].apply(lambda x: x.month)
 maxrdate_month.value_counts().plot(kind='bar', color='b')
 ```
 
 ```python
-%matplotlib inline
 plt.figure(figsize=(10,5))
 maxrdate_month=data['FISTDATE'].apply(lambda x: x.month)
 maxrdate_month.value_counts().plot(kind='bar', color='b')
 ```
 
 ```python
-%matplotlib inline
 plt.figure(figsize=(10,5))
 maxrdate_month=data['LASTDATE'].apply(lambda x: x.month)
 maxrdate_month.value_counts().plot(kind='bar', color='b')
