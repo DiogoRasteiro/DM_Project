@@ -53,7 +53,31 @@ data=data_backup.copy()
 
 ### Initial Data Transformation
 
+```python
+features_to_delete = [
+    'Unnamed: 0',
+    'OSOURCE', # Does not contain information pertaining to the Donor's characteristics
+    'TCODE', # Title does not contain information
+    'MAILCODE', # Does not help characterize a donor
+    'PVASTATE', # Does not add information because we can calculate it using STATE, and most values are empty
+    'NOEXCH', # Could not analyze, and does not contain pertinent information
+    'RECPGVG', # Not pertinent
+    'RECSWEEP', # Not pertinent
+    'CHILD03', 'CHILD07', 'CHILD12', 'CHILD18', # Values are mostly empty, and don't give much info
+    'GEOCODE', # Not pertinent
+    'HPHONE_D', 
+    'CONTROLN',
+    'MSA',
+    'ADI',
+    'DMA',
+    'MDMAUD',#ALREADY HAVE VARIABLES THAT KEEP THE INDIVIDUAL BYTES OF THIS VAR
+    'RFA_2R',
+    'RFA_2','RFA_3','RFA_4','RFA_5','RFA_6','RFA_7','RFA_8','RFA_9','RFA_10','RFA_11','RFA_12','RFA_13','RFA_14','RFA_15',
+    'RFA_16','RFA_17','RFA_18','RFA_19','RFA_20','RFA_21','RFA_22','RFA_23','RFA_24', 
+]
 
+data.drop(features_to_delete,inplace=True, axis=1)
+```
 Since there are some columns that are flags(essentially binary) but are represented as categorical variables, we will detect them and change them to a binary column.
 
 ```python
@@ -77,7 +101,62 @@ data['GEOCODE2'].replace(' ', 'Other', inplace=True)
 ```
 
 ```python
+## this variable will count the number of times each individual replied to a promotion 
+RDATEcol=[True if 'RDATE_' in column else False for column in data.columns]
+data['NREPLIES'] = data.loc[:,RDATEcol].count(axis=1)
+```
+
+```python
+data['NREPLIES'].value_counts()
+```
+
+```python
 data=data.loc[:, data.isnull().mean() <= .1]
+```
+
+```python
+pd.set_option('display.max_rows',350)
+data.isna().sum().sort_values(ascending=False).to_frame()
+```
+
+```python
+##removing the 2 rows with missing values in fistdate 
+data = data[~(data.FISTDATE.isna())]
+```
+
+```python
+ADATEcol=[True if 'ADATE' in column else False for column in data.columns]
+data.drop(data.loc[:,ADATEcol].columns, inplace=True, axis=1)
+```
+
+```python
+data['GENDER'] = data['GENDER'].apply(lambda x: 'U' if x in ['A', 'C', np.nan] else x)
+data['GENDER'].value_counts()
+```
+
+```python
+data['DOMAIN'].value_counts()
+```
+
+```python
+data['URB_LVL']=data['DOMAIN'].apply(lambda x: str(x)[0] if x is not np.nan else np.nan)
+data['SOCIO_ECO']=data['DOMAIN'].apply(lambda x: str(x)[1] if x is not np.nan else np.nan)
+```
+
+```python
+data['URB_LVL'].value_counts()
+```
+
+```python
+data['SOCIO_ECO'].value_counts()
+```
+
+```python
+data.drop(columns='DOMAIN', inplace=True)
+```
+
+```python
+
 ```
 
 ### Pandas-Profiling Report
@@ -92,12 +171,12 @@ profile = ProfileReport(
         "kendall": {"calculate": False},
         "phi_k": {"calculate": False},
         "cramers": {"calculate": False},
-   # },minimal=True
+    #},minimal=True
 #)
 
 
 
-#profile.to_file(os.path.join('.', "donor_data.html"))
+#profile.to_file(os.path.join('.', "donor_data2.html"))
 ```
 
 ## Feature Extraction
@@ -142,6 +221,7 @@ data['AVG_AMNT']=data.loc[:,AMNTcol].mean(axis=1)
 
 # Detect if the user has a limit for the 'In House' campaign
 data['HAS_LIMIT_SOLIH'] = data['SOLIH'].apply(lambda x: 1 if float(x)>=0 else 0)
+data['HAS_LIMIT_SOLP3'] = data['SOLP3'].apply(lambda x: 1 if float(x)>=0 else 0)
 
 # By dividing the time period between First and Last gifts by the total amount of gifts,
 # we obtain the average period between gifts
@@ -149,51 +229,18 @@ data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTA
 ```
 
 ```python
+data['ODATE'] = data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
+data['LASTDATE_DAYS'] = data['LASTDATE'].apply(lambda x: (datetime.now()-x).days)
+data['FISTDATE_DAYS'] = data['FISTDATE'].apply(lambda x: (datetime.now()-x).days)
+data['MAXRDATE_DAYS'] = data['MAXRDATE'].apply(lambda x: (datetime.now()-x).days)
+data['NEXTDATE_DIF'] = data['FISTDATE'] - data['NEXTDATE']
+
+# By dividing the time period between First and Last gifts by the total amount of gifts,
+# we obtain the average period between gifts
 data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTALL']
-```
-```python
-data['DAYS_PER_GIFT']
 ```
 # Data Cleaning and Missing Values Treatment
 
-```python
-features_to_delete = [
-    'Unnamed: 0',
-    'OSOURCE', # Does not contain information pertaining to the Donor's characteristics
-    'TCODE', # Title does not contain information
-    'MAILCODE', # Does not help characterize a donor
-    'PVASTATE', # Does not add information because we can calculate it using STATE, and most values are empty
-    'NOEXCH', # Could not analyze, and does not contain pertinent information
-    'RECPGVG', # Not pertinent
-    'RECSWEEP', # Not pertinent
-    'CHILD03', 'CHILD07', 'CHILD12', 'CHILD18', # Values are mostly empty, and don't give much info
-    'GEOCODE', # Not pertinent
-    'HPHONE_D', 
-    'CONTROLN',
-    'MSA',
-    'ADI',
-    'DMA',
-    'MDMAUD',#ALREADY HAVE VARIABLES THAT KEEP THE INDIVIDUAL BYTES OF THIS VAR
-    'RFA_2R',
-    'RFA_2','RFA_3','RFA_4','RFA_5','RFA_6','RFA_7','RFA_8','RFA_9','RFA_10','RFA_11','RFA_12','RFA_13','RFA_14','RFA_15',
-    'RFA_16','RFA_17','RFA_18','RFA_19','RFA_20','RFA_21','RFA_22','RFA_23','RFA_24',
-    'ADATE_2','ADATE_3','ADATE_4','ADATE_5','ADATE_6','ADATE_7','ADATE_8','ADATE_9','ADATE_10','ADATE_11','ADATE_12','ADATE_13',
-    'ADATE_14','ADATE_15','ADATE_16','ADATE_17','ADATE_18','ADATE_19','ADATE_20','ADATE_21','ADATE_22','ADATE_23','ADATE_24',
-    'RDATE_3','RDATE_4','RDATE_5','RDATE_6','RDATE_7','RDATE_8','RDATE_9','RDATE_10','RDATE_11','RDATE_12','RDATE_13',
-    'RDATE_14','RDATE_15','RDATE_16','RDATE_17','RDATE_18','RDATE_19','RDATE_20','RDATE_21','RDATE_22','RDATE_23','RDATE_24',
-    'RAMNT_3' ,'RAMNT_4' ,'RAMNT_5' ,'RAMNT_6' ,'RAMNT_7' ,'RAMNT_8' ,'RAMNT_9' ,'RAMNT_10' ,'RAMNT_11' ,'RAMNT_12' ,
-    'RAMNT_13' ,'RAMNT_14' ,'RAMNT_15' ,'RAMNT_16' ,'RAMNT_17' ,'RAMNT_18' ,'RAMNT_19' ,'RAMNT_20' ,'RAMNT_21' ,
-    'RAMNT_22' ,'RAMNT_23' ,'RAMNT_24',
-    'FISTDATE',
-    'LASTDATE',
-    'MINRDATE',
-    'MAXRDATE',
-    'NEXTDATE'
-    
-]
-
-data.drop(features_to_delete,inplace=True, axis=1)
-```
 ```python
 flag_col=[]
 for col in data.columns:
