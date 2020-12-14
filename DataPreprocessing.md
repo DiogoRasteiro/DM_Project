@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from scipy import stats
 from sklearn.cluster import KMeans
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from pandas_profiling import ProfileReport
 from datetime import datetime
 
@@ -146,7 +146,46 @@ RDATEcol = [True if 'RDATE_' in column else False for column in data.columns]
 data['NREPLIES'] = data.loc[:, RDATEcol].count(axis=1)
 ```
 
-### Missing Value Treatment
+```python
+# Then, for every Promotion, we calculate the difference between receiving the solicitation
+# and answering it
+for i in range(3, 25):
+    try:
+        data['DIF_' + str(i)] = (data['RDATE_' + str(i)] - data['ADATE_' + str(i)])
+        data['DIF_' + str(i)] = data['DIF_' + str(i)].map(lambda x: x.days)
+    except Exception as e:
+        pass
+
+# For each promotion the donor responded to, we calculate the average amount of days to respond
+difcol=[True if 'DIF_' in column else False for column in data.columns]
+data['AVG_DIF']=data.loc[:,difcol].mean(axis=1)
+
+# Afterwards we drop the columns with the differences since we do not need them for further analysis
+difcol=[True if 'DIF_' in column else False for column in data.columns]
+data.drop(data.loc[:,difcol].columns, inplace=True, axis=1)
+
+# Detect all columns regarding amounts given
+AMNTcol=[True if 'RAMNT_' in column else False for column in data.columns]
+# Make an average out of them
+data['AVG_AMNT']=data.loc[:,AMNTcol].mean(axis=1)
+```
+
+```python
+lista = []
+for column in data.columns:
+    if 'RAMNT_' in column:
+        lista.append(column)
+```
+
+```python
+lista
+```
+
+```python
+data[data.loc[:, AMNTcol].columns]
+```
+
+### Missing Values Treatment
 
 
 First, through observation of the values and reading the Metadata, we detected several missing values that weren't directly identified as such. Thus, we will fix them.
@@ -227,38 +266,11 @@ for col in data.loc[:, datetimecol].columns:
     except Exception as e:
         pass
 
-# Then, for every Promotion, we calculate the difference between receiving the solicitation
-# and answering it
-for i in range(3, 25):
-    try:
-        data['DIF_' + str(i)] = (data['RDATE_' + str(i)] - data['ADATE_' + str(i)])
-        data['DIF_' + str(i)] = data['DIF_' + str(i)].map(lambda x: x.days)
-    except Exception as e:
-        pass
-    
-# For each promotion the donor responded to, we calculate the average amount of days to respond
-difcol=[True if 'DIF_' in column else False for column in data.columns]
-data['AVG_DIF']=data.loc[:,difcol].mean(axis=1)
-
-# Afterwards we drop the columns with the differences since we do not need them for further analysis
-difcol=[True if 'DIF_' in column else False for column in data.columns]
-data.drop(data.loc[:,difcol].columns, inplace=True, axis=1)
-
 # Then we convert several dates to 'Amount of Day since' format
 data['ODATE'] = data['ODATEDW'].apply(lambda x: (datetime.now()-x).days)
 data['LASTDATE_DAYS'] = data['LASTDATE'].apply(lambda x: (datetime.now()-x).days)
 data['FISTDATE_DAYS'] = data['FISTDATE'].apply(lambda x: (datetime.now()-x).days)
 data['MAXRDATE_DAYS'] = data['MAXRDATE'].apply(lambda x: (datetime.now()-x).days)
-data['NEXTDATE_DIF'] = data['FISTDATE'] - data['NEXTDATE']
-
-# Detect all columns regarding amounts given
-AMNTcol=[True if 'RAMNT_' in column else False for column in data.columns]
-# Make an average out of them
-data['AVG_AMNT']=data.loc[:,AMNTcol].mean(axis=1)
-
-# Detect if the user has a limit for the 'In House' campaign
-data['HAS_LIMIT_SOLIH'] = data['SOLIH'].apply(lambda x: 1 if float(x)>=0 else 0)
-data['HAS_LIMIT_SOLP3'] = data['SOLP3'].apply(lambda x: 1 if float(x)>=0 else 0)
 
 # By dividing the time period between First and Last gifts by the total amount of gifts,
 # we obtain the average period between gifts
@@ -279,6 +291,22 @@ non_metric_feat = data.columns.drop(metric_feat).to_list()
 
 ```python
 data[non_metric_feat]
+```
+
+```python
+data[metric_feat].isna().sum()
+```
+
+```python
+data = data.drop(columns = ['ODATEDW', 'MINRDATE', 'MAXRDATE', 'LASTDATE', 'FISTDATE', 'ZIP', 'GEOCODE2'])
+```
+
+```python
+ohc = OneHotEncoder(sparse=False)
+ohc_feat = ohc.fit_transform(data[["Marca"]])
+ohc_feat_names = ohc.get_feature_names()
+ohc_df = pd.DataFrame(ohc_feat, index=data.index, columns=ohc_feat_names)
+ohc_df
 ```
 
 # Correlation Analysis
