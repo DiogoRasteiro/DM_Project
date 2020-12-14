@@ -178,11 +178,7 @@ for column in data.columns:
 ```
 
 ```python
-lista
-```
-
-```python
-data[data.loc[:, AMNTcol].columns]
+data.drop(columns = lista, inplace = True)
 ```
 
 ### Missing Values Treatment
@@ -302,11 +298,11 @@ data = data.drop(columns = ['ODATEDW', 'MINRDATE', 'MAXRDATE', 'LASTDATE', 'FIST
 ```
 
 ```python
-ohc = OneHotEncoder(sparse=False)
-ohc_feat = ohc.fit_transform(data[["Marca"]])
-ohc_feat_names = ohc.get_feature_names()
-ohc_df = pd.DataFrame(ohc_feat, index=data.index, columns=ohc_feat_names)
-ohc_df
+# ohc = OneHotEncoder(sparse=False)
+# ohc_feat = ohc.fit_transform(data[["Marca"]])
+# ohc_feat_names = ohc.get_feature_names()
+# ohc_df = pd.DataFrame(ohc_feat, index=data.index, columns=ohc_feat_names)
+# ohc_df
 ```
 
 # Correlation Analysis
@@ -328,44 +324,22 @@ to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > 0.9
 data.drop(columns=to_drop,inplace=True,axis=1)
 ```
 
+## Feature Selection - Continuation
+
+```python
+data.columns.to_list()
+```
+
+```python
+#data.drop(columns = ['STATE'], inplace = True)
+#Devemos dropar o state?
+```
+
 ## Population Characteristics
 
 ```python
-sns.set_theme(style="darkgrid")
+sns.set_style(style="darkgrid")
 gender=data['GENDER'].map(lambda x: 'U' if x==" " else x)
 perc_gender=round(gender.value_counts()/len(data['GENDER'])*100, 2)
 perc_gender.plot(kind='pie', colors=['fuchsia','royalblue','forestgreen','black'])
-```
-
-```python
-sns.histplot(data['NUMCHLD'])
-```
-
-```python
-plt.figure(figsize=(10,5))
-maxrdate_month=data['MAXRDATE'].apply(lambda x: x.month)
-maxrdate_month.value_counts().plot(kind='bar', color='b')
-
-```
-
-```python
-plt.figure(figsize=(10,5))
-maxrdate_month=data['MINRDATE'].apply(lambda x: x.month)
-maxrdate_month.value_counts().plot(kind='bar', color='b')
-```
-
-```python
-plt.figure(figsize=(10,5))
-maxrdate_month=data['FISTDATE'].apply(lambda x: x.month)
-maxrdate_month.value_counts().plot(kind='bar', color='b')
-```
-
-```python
-plt.figure(figsize=(10,5))
-maxrdate_month=data['LASTDATE'].apply(lambda x: x.month)
-maxrdate_month.value_counts().plot(kind='bar', color='b')
-```
-
-```python
-
 ```
