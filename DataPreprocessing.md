@@ -355,8 +355,19 @@ data.isna().sum()
 ```
 
 ```python
-imputer = KNNImputer(n_neighbors=100)
-imputer.fit_transform(data)
+imputer = KNNImputer(n_neighbors=10)
+KNN=imputer.fit_transform(data)
+####
+####
+#Há valores diferentes de 0 e 1
+```
+
+```python
+data1=pd.DataFrame(KNN, index=data.index, columns=data.columns)
+```
+
+```python
+data=data1.copy()
 ```
 
 # Correlation Analysis
@@ -380,6 +391,73 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 
 ## Feature Selection - Continuation
 
+```python
+preferences=['is_male', 'COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
+             'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
+             'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
+
+demography=['is_male', 'MALEMILI', 'MALEVET', 'VIETVETS', 'WWIIVETS', 'LOCALGOV', 
+            'STATEGOV', 'FEDGOV', 'POP901', 'POP90C1', 'POP90C2', 'POP90C3', 'POP90C4', 
+            'ETH1', 'ETH2', 'ETH3', 'ETH4', 'ETH5', 'ETH6', 'ETH7', 'ETH8', 'ETH9', 'ETH10', 
+            'ETH11', 'ETH12', 'ETH13', 'ETH14', 'ETH15', 'ETH16', 'AGE901', 'AGE907', 'CHIL1', 
+            'CHIL2', 'CHIL3', 'AGEC1', 'AGEC2', 'AGEC3', 'AGEC4', 'AGEC5', 'AGEC7', 'CHILC1', 'CHILC2', 
+            'CHILC3', 'CHILC4', 'CHILC5', 'HHAGE2', 'HHN1', 'HHN2', 'HHN3', 'HHN6', 'MARR1', 'MARR2', 'MARR4', 
+            'DW1', 'DW3', 'DW4', 'DW7', 'DW8', 'DW9', 'HV1', 'HV3', 'HU1', 'HU3', 'HU5', 'HHD4', 'HHD7', 'HHD8', 
+            'HHD10', 'HHD12', 'ETHC1', 'ETHC2', 'ETHC4', 'ETHC6', 'HVP1', 'HVP6', 'HUR1', 'HUR2', 'RHP4', 'HUPA1', 
+            'HUPA3', 'HUPA4', 'IC1', 'IC6', 'IC7', 'IC8', 'IC9', 'IC10', 'IC11', 'IC12', 'IC13', 'IC14', 'IC15', 'IC16', 
+            'IC17', 'IC18', 'HHAS2', 'HHAS3', 'HHAS4', 'MC1', 'MC3', 'TPE1', 'TPE2', 'TPE3', 'TPE4', 'TPE5', 'TPE6', 'TPE7', 
+            'TPE8', 'TPE9', 'PEC1', 'PEC2', 'TPE10', 'TPE11', 'TPE12', 'TPE13', 'LFC1', 'LFC6', 'LFC7', 'LFC8', 'LFC9', 'LFC10', 
+            'OCC1', 'OCC2', 'OCC3', 'OCC4', 'OCC5', 'OCC6', 'OCC7', 'OCC8', 'OCC9', 'OCC10', 'OCC11', 'OCC12', 'OCC13', 'EIC1', 'EIC2',
+            'EIC3', 'EIC4', 'EIC5', 'EIC6', 'EIC7', 'EIC8', 'EIC9', 'EIC10', 'EIC11', 'EIC12', 'EIC13', 'EIC14', 'EIC15', 'EIC16',
+            'OEDC1', 'OEDC2', 'OEDC3', 'OEDC4', 'OEDC5', 'OEDC6', 'OEDC7', 'EC1', 'EC2', 'EC3', 'EC4', 'EC5', 'EC6', 'EC7',
+            'EC8', 'SEC1', 'SEC2', 'SEC3', 'SEC4', 'SEC5', 'AFC1', 'AFC2', 'AFC3', 'AFC4', 'AFC6', 'VC1', 'VC2', 'VC3',
+            'VC4', 'ANC1', 'ANC2', 'ANC3', 'ANC4', 'ANC5', 'ANC6', 'ANC7', 'ANC8', 'ANC9', 'ANC10', 'ANC11', 'ANC12',
+            'ANC13', 'ANC14', 'ANC15', 'POBC1', 'POBC2', 'LSC1', 'LSC2', 'LSC3', 'LSC4', 'VOC1', 'VOC2', 'VOC3',
+            'HC1', 'HC2', 'HC3', 'HC4', 'HC6', 'HC7', 'HC9', 'HC10', 'HC11', 'HC12', 'HC13', 'HC14', 'HC15',
+            'HC16', 'HC17', 'HC19', 'HC20','HC21', 'MHUC1', 'MHUC2', 'AC1', 'AC2', 'URB_LVL_S','URB_LVL_R','URB_LVL_C','URB_LVL_T',
+            'URB_LVL_U','SOCIO_ECO_1','SOCIO_ECO_2','SOCIO_ECO_3','SOCIO_ECO_4']
+
+value=['RECINHSE', 'RECP3', 'GENDER', 'HIT', 'MAJOR', 'PEPSTRFL', 'CARDPROM', 'CARDPM12', 
+       'NUMPRM12', 'RAMNTALL', 'NGIFTALL', 'MINRAMNT', 'MAXRAMNT', 'LASTGIFT', 'AVGGIFT',
+       'RFA_2F', 'RFA_2_Amount', 'MDMAUD_Recency', 'MDMAUD_Frequency', 'MDMAUD_Amount', 'NREPLIES', 'AVG_AMNT', 'LASTDATE_DAYS',
+       'MAXRDATE_DAYS', 'DAYS_PER_GIFT']
+```
+
+```python
+# Prepare figure
+fig = plt.figure(figsize=(20, 20))
+# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
+corr = np.round(data[preferences].corr(method="spearman"), decimals=2)
+# Build annotation matrix (values above |0.5| will appear annotated in the plot)
+mask_annot = np.absolute(corr.values) >= 0.5
+annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
+# Plot heatmap of the correlation matrix
+sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
+            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
+# Layout
+fig.subplots_adjust(top=0.95)
+fig.suptitle("Correlation Matrix", fontsize=20)
+plt.show()
+```
+
+```python
+## K Means
+inertia=[]
+k=range(2, 20)
+for i in k:
+        kmeans=KMeans(n_clusters=i, random_state=45).fit(data[preferences])
+        inertia.append(kmeans.inertia_)
+        
+plt.plot(k, inertia, 'bx-')
+plt.xlabel('k')
+plt.ylabel('Inertia')
+plt.title('The Elbow Method showing the optimal k')
+plt.show()
+```
+
+```python
+kmeans=KMeans(n_clusters=100, random_state=45).fit(data[preferences])
+```
 
 ## Population Characteristics
 
