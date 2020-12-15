@@ -28,6 +28,7 @@ from scipy import stats
 from sklearn.cluster import KMeans
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import KNNImputer
 from pandas_profiling import ProfileReport
 from datetime import datetime
 
@@ -278,10 +279,8 @@ data['DAYS_PER_GIFT']=(data['FISTDATE_DAYS']-data['LASTDATE_DAYS'])/data['NGIFTA
 ```python
 numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
 
-metric_feat = data.select_dtypes(include=numerics).columns
-```
+metric_feat = data.select_dtypes(include=np.number).columns
 
-```python
 non_metric_feat = data.columns.drop(metric_feat).to_list()
 ```
 
@@ -290,19 +289,74 @@ data[non_metric_feat]
 ```
 
 ```python
-data[metric_feat].isna().sum()
+data = data.drop(columns=[
+    'ODATEDW', 'MINRDATE', 'MAXRDATE', 'LASTDATE', 'FISTDATE', 'ZIP',
+    'GEOCODE2', 'STATE'
+])
 ```
 
 ```python
-data = data.drop(columns = ['ODATEDW', 'MINRDATE', 'MAXRDATE', 'LASTDATE', 'FISTDATE', 'ZIP', 'GEOCODE2'])
+data = pd.concat([
+    data,
+    pd.get_dummies(data['MDMAUD_R'], prefix='MDMAUD_Recency').iloc[:, :-1]
+],
+                 axis=1)
+data = pd.concat([
+    data,
+    pd.get_dummies(data['MDMAUD_F'], prefix='MDMAUD_Frequency').iloc[:, :-1]
+],
+                 axis=1)
+data = pd.concat([
+    data,
+    pd.get_dummies(data['MDMAUD_A'], prefix='MDMAUD_Amount').iloc[:, :-1]
+],
+                 axis=1)
+data = pd.concat([
+    data,
+    pd.get_dummies(data['RFA_2A'], prefix='RFA_2_Amount', drop_first=True)
+],
+                 axis=1)
 ```
 
 ```python
-# ohc = OneHotEncoder(sparse=False)
-# ohc_feat = ohc.fit_transform(data[["Marca"]])
-# ohc_feat_names = ohc.get_feature_names()
-# ohc_df = pd.DataFrame(ohc_feat, index=data.index, columns=ohc_feat_names)
-# ohc_df
+data['is_male'] = data['GENDER'].map(lambda x: 1 if x == 'M' else 0)
+```
+
+```python
+data['URB_LVL_S'] = data['URB_LVL'].apply(lambda x: 1 if x == 'S' else (np.nan if x is np.nan else 0))
+data['URB_LVL_R'] = data['URB_LVL'].apply(lambda x: 1 if x == 'R' else (np.nan if x is np.nan else 0))
+data['URB_LVL_C'] = data['URB_LVL'].apply(lambda x: 1 if x == 'C' else (np.nan if x is np.nan else 0))
+data['URB_LVL_T'] = data['URB_LVL'].apply(lambda x: 1 if x == 'T' else (np.nan if x is np.nan else 0))
+data['URB_LVL_U'] = data['URB_LVL'].apply(lambda x: 1 if x == 'U' else (np.nan if x is np.nan else 0))
+```
+
+```python
+data.iloc[:,-5:].isna().sum()
+```
+
+```python
+data['SOCIO_ECO_1'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 1 else(np.nan if x is np.nan else 0))
+data['SOCIO_ECO_2'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 2 else(np.nan if x is np.nan else 0))
+data['SOCIO_ECO_3'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 3 else(np.nan if x is np.nan else 0))
+data['SOCIO_ECO_4'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 4 else(np.nan if x is np.nan else 0))
+```
+
+```python
+data.drop([
+    'GENDER', 'RFA_2A', 'MDMAUD_R', 'MDMAUD_F',
+    'MDMAUD_A', 'GENDER', 'URB_LVL', 'SOCIO_ECO'
+],
+          axis=1,
+          inplace=True)
+```
+
+```python
+data.isna().sum()
+```
+
+```python
+imputer = KNNImputer(n_neighbors=100)
+imputer.fit_transform(data)
 ```
 
 # Correlation Analysis
@@ -326,14 +380,6 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 
 ## Feature Selection - Continuation
 
-```python
-data.columns.to_list()
-```
-
-```python
-#data.drop(columns = ['STATE'], inplace = True)
-#Devemos dropar o state?
-```
 
 ## Population Characteristics
 
