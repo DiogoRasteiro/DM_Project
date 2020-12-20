@@ -43,6 +43,10 @@ data=pd.read_csv('data/donors.csv')
 ```
 
 ```python
+data_backup=pd.read_csv('data/donors.csv')
+```
+
+```python
 data
 ```
 
@@ -319,26 +323,30 @@ data = pd.concat([
 ```
 
 ```python
+
+```
+
+```python
 data['is_male'] = data['GENDER'].map(lambda x: 1 if x == 'M' else 0)
 ```
 
 ```python
-data['URB_LVL_S'] = data['URB_LVL'].apply(lambda x: 1 if x == 'S' else (np.nan if x is np.nan else 0))
-data['URB_LVL_R'] = data['URB_LVL'].apply(lambda x: 1 if x == 'R' else (np.nan if x is np.nan else 0))
-data['URB_LVL_C'] = data['URB_LVL'].apply(lambda x: 1 if x == 'C' else (np.nan if x is np.nan else 0))
-data['URB_LVL_T'] = data['URB_LVL'].apply(lambda x: 1 if x == 'T' else (np.nan if x is np.nan else 0))
-data['URB_LVL_U'] = data['URB_LVL'].apply(lambda x: 1 if x == 'U' else (np.nan if x is np.nan else 0))
+data['URB_LVL_S'] = data['URB_LVL'].astype('str').apply(lambda x: 1 if x == 'S' else (np.nan if x=='nan' else 0))
+data['URB_LVL_R'] = data['URB_LVL'].astype('str').apply(lambda x: 1 if x == 'R' else (np.nan if x=='nan' else 0))
+data['URB_LVL_C'] = data['URB_LVL'].astype('str').apply(lambda x: 1 if x == 'C' else (np.nan if x=='nan' else 0))
+data['URB_LVL_T'] = data['URB_LVL'].astype('str').apply(lambda x: 1 if x == 'T' else (np.nan if x=='nan' else 0))
+data['URB_LVL_U'] = data['URB_LVL'].astype('str').apply(lambda x: 1 if x == 'U' else (np.nan if x=='nan' else 0))
+```
+
+```python
+data['SOCIO_ECO_1'] = data['SOCIO_ECO'].astype('str').apply(lambda x: 1 if x == '1' else(np.nan if x=='nan' else 0))
+data['SOCIO_ECO_2'] = data['SOCIO_ECO'].astype('str').apply(lambda x: 1 if x == '2' else(np.nan if x=='nan' else 0))
+data['SOCIO_ECO_3'] = data['SOCIO_ECO'].astype('str').apply(lambda x: 1 if x == '3' else(np.nan if x=='nan' else 0))
+data['SOCIO_ECO_4'] = data['SOCIO_ECO'].astype('str').apply(lambda x: 1 if x == '4' else(np.nan if x=='nan' else 0))
 ```
 
 ```python
 data.iloc[:,-5:].isna().sum()
-```
-
-```python
-data['SOCIO_ECO_1'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 1 else(np.nan if x is np.nan else 0))
-data['SOCIO_ECO_2'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 2 else(np.nan if x is np.nan else 0))
-data['SOCIO_ECO_3'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 3 else(np.nan if x is np.nan else 0))
-data['SOCIO_ECO_4'] = data['SOCIO_ECO'].apply(lambda x: 1 if x == 4 else(np.nan if x is np.nan else 0))
 ```
 
 ```python
@@ -355,8 +363,9 @@ data.isna().sum()
 ```
 
 ```python
-imputer = KNNImputer(n_neighbors=10)
+imputer = KNNImputer(n_neighbors=1)
 KNN=imputer.fit_transform(data)
+KNN
 ####
 ####
 #Há valores diferentes de 0 e 1
@@ -367,7 +376,39 @@ data1=pd.DataFrame(KNN, index=data.index, columns=data.columns)
 ```
 
 ```python
+data1['URB_LVL_S'].value_counts()
+```
+
+```python
+data['URB_LVL_S'].value_counts()
+```
+
+```python
+data1_backup=data1.copy()
+```
+
+```python
+data_backup=data.copy()
+```
+
+```python
 data=data1.copy()
+```
+
+# Coherence Check
+
+```python
+data['URB_COH']=data1['URB_LVL_S']+data1['URB_LVL_R']+data1['URB_LVL_C']+data1['URB_LVL_T']+data1['URB_LVL_U']
+data['URB_COH'].value_counts()
+```
+
+```python
+data['SOCIO_COH']=data1['SOCIO_ECO_1']+data1['SOCIO_ECO_2']+data1['SOCIO_ECO_3']+data1['SOCIO_ECO_4']
+data['SOCIO_COH'].value_counts()
+```
+
+```python
+data.drop(columns=['SOCIO_COH','URB_COH'], inplace=True)
 ```
 
 # Correlation Analysis
@@ -389,7 +430,7 @@ to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > 0.9
 data.drop(columns=to_drop,inplace=True,axis=1)
 ```
 
-## Feature Selection - Continuation
+### Data Partition- Cluster Perspectives
 
 ```python
 preferences=['is_male', 'COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
@@ -423,6 +464,52 @@ value=['RECINHSE', 'RECP3', 'GENDER', 'HIT', 'MAJOR', 'PEPSTRFL', 'CARDPROM', 'C
        'MAXRDATE_DAYS', 'DAYS_PER_GIFT']
 ```
 
+# Outlier Analysis
+
+
+Preferences
+
+```python
+binary_cols=data.apply(lambda x: max(x)==1, 0)
+binary_cols=data.loc[:, binary_cols].columns
+```
+
+```python
+# All Numeric Variables' Box Plots in one figure
+sns.set()
+# Prepare figure. Create individual axes where each box plot will be placed
+fig, axes = plt.subplots(4, int(len(preferences) / 4), figsize=(20, 20))
+# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
+for ax, feat in zip(axes.flatten(), preferences): 
+# Notice the zip() function and flatten() method
+    sns.histplot(x=data[feat], ax=ax)
+# Layout# Add a centered title to the figure:
+title = "Numeric Variables' Box Plots"
+plt.suptitle(title)
+        
+plt.show()
+```
+
+Demography
+
+```python
+# All Numeric Variables' Box Plots in one figure
+sns.set()
+# Prepare figure. Create individual axes where each box plot will be placed
+fig, axes = plt.subplots(20, int(len(demography) / 10), figsize=(20, 20))
+# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
+for ax, feat in zip(axes.flatten(), preferences): 
+# Notice the zip() function and flatten() method
+    sns.histplot(x=data[feat], ax=ax)
+# Layout# Add a centered title to the figure:
+title = "Numeric Variables' Box Plots"
+plt.suptitle(title)
+        
+plt.show()
+```
+
+## Feature Selection - Continuation
+
 ```python
 # Prepare figure
 fig = plt.figure(figsize=(20, 20))
@@ -441,6 +528,12 @@ plt.show()
 ```
 
 ```python
+preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
+             'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
+             'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
+```
+
+```python
 ## K Means
 inertia=[]
 k=range(2, 20)
@@ -456,7 +549,31 @@ plt.show()
 ```
 
 ```python
-kmeans=KMeans(n_clusters=100, random_state=45).fit(data[preferences])
+kmeans=KMeans(n_clusters=6, random_state=45).fit(data[preferences])
+```
+
+```python
+centroids=pd.DataFrame(kmeans.cluster_centers_, columns=data[preferences].columns)
+```
+
+```python
+centroids=np.round(centroids, 4)
+```
+
+```python
+centroids
+```
+
+```python
+centroids.corr()
+```
+
+```python
+data['Preferences']=kmeans.labels_
+```
+
+```python
+data['Preferences'].value_counts()
 ```
 
 ## Population Characteristics
