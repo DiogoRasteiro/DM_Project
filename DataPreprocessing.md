@@ -31,6 +31,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import KNNImputer
 from pandas_profiling import ProfileReport
 from datetime import datetime
+from sklearn.metrics.pairwise import euclidean_distances
 
 %matplotlib inline
 pd.set_option('display.max_rows', 350)
@@ -528,9 +529,12 @@ plt.show()
 ```
 
 ```python
-preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
-             'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
-             'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
+# preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
+#              'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
+#              'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
+preferences=['VETERANS', 'BIBLE', 
+             'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 
+             'GARDENIN', 'WALKER']
 ```
 
 ```python
@@ -549,7 +553,7 @@ plt.show()
 ```
 
 ```python
-kmeans=KMeans(n_clusters=6, random_state=45).fit(data[preferences])
+kmeans=KMeans(n_clusters=7, random_state=45).fit(data[preferences])
 ```
 
 ```python
@@ -565,15 +569,24 @@ centroids
 ```
 
 ```python
-centroids.corr()
-```
-
-```python
 data['Preferences']=kmeans.labels_
 ```
 
 ```python
 data['Preferences'].value_counts()
+```
+
+```python
+distance_inter_cluster = euclidean_distances(centroids)
+average_inter_cluters_distance = (sum(sum(distance_inter_cluster)) / 2) / 7
+print('Average distance inter_cluster:', average_inter_cluters_distance)
+
+clusters_preferences = pd.DataFrame(kmeans.labels_, columns=['Centroids'])
+clusters_preferences['ID'] = data[preferences].index
+```
+
+```python
+clusters_preferences
 ```
 
 ## Population Characteristics
