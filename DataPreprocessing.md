@@ -32,6 +32,7 @@ from sklearn.impute import KNNImputer
 from pandas_profiling import ProfileReport
 from datetime import datetime
 from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.base import clone
 
 %matplotlib inline
 pd.set_option('display.max_rows', 350)
@@ -324,10 +325,6 @@ data = pd.concat([
 ```
 
 ```python
-
-```
-
-```python
 data['is_male'] = data['GENDER'].map(lambda x: 1 if x == 'M' else 0)
 ```
 
@@ -434,7 +431,7 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 ### Data Partition- Cluster Perspectives
 
 ```python
-preferences=['is_male', 'COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
+preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
              'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
              'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
 
@@ -483,7 +480,7 @@ fig, axes = plt.subplots(4, int(len(preferences) / 4), figsize=(20, 20))
 # Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
 for ax, feat in zip(axes.flatten(), preferences): 
 # Notice the zip() function and flatten() method
-    sns.histplot(x=data[feat], ax=ax)
+    sns.distplot(a=data[feat], ax=ax)
 # Layout# Add a centered title to the figure:
 title = "Numeric Variables' Box Plots"
 plt.suptitle(title)
@@ -501,7 +498,7 @@ fig, axes = plt.subplots(20, int(len(demography) / 10), figsize=(20, 20))
 # Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
 for ax, feat in zip(axes.flatten(), preferences): 
 # Notice the zip() function and flatten() method
-    sns.histplot(x=data[feat], ax=ax)
+    sns.distplot(a=data[feat], ax=ax)
 # Layout# Add a centered title to the figure:
 title = "Numeric Variables' Box Plots"
 plt.suptitle(title)
@@ -528,19 +525,24 @@ fig.suptitle("Correlation Matrix", fontsize=20)
 plt.show()
 ```
 
+## Clustering - Preferences
+
+
+### K-means
+
 ```python
-# preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
-#              'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
-#              'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
-preferences=['VETERANS', 'BIBLE', 
-             'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 
-             'GARDENIN', 'WALKER']
+preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
+             'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
+             'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
+# preferences=['VETERANS', 'BIBLE', 
+#              'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 
+#              'GARDENIN', 'WALKER']
 ```
 
 ```python
 ## K Means
 inertia=[]
-k=range(2, 20)
+k=range(2, 10)
 for i in k:
         kmeans=KMeans(n_clusters=i, random_state=45).fit(data[preferences])
         inertia.append(kmeans.inertia_)
@@ -553,7 +555,7 @@ plt.show()
 ```
 
 ```python
-kmeans=KMeans(n_clusters=7, random_state=45).fit(data[preferences])
+kmeans=KMeans(n_clusters=6, random_state=45).fit(data[preferences])
 ```
 
 ```python
@@ -565,28 +567,95 @@ centroids=np.round(centroids, 4)
 ```
 
 ```python
-centroids
+centroids[['VETERANS', 'WALKER', 'GARDENIN', 'CDPLAY', 'STEREO', 'PETS']]
 ```
 
 ```python
-data['Preferences']=kmeans.labels_
+centroids.var().sort_values()
 ```
 
 ```python
-data['Preferences'].value_counts()
+data['Preferences_Kmeans'] = kmeans.labels_
 ```
 
 ```python
-distance_inter_cluster = euclidean_distances(centroids)
-average_inter_cluters_distance = (sum(sum(distance_inter_cluster)) / 2) / 7
-print('Average distance inter_cluster:', average_inter_cluters_distance)
+def get_ss(df):
+    """Computes the sum of squares for all variables given a dataset
+    """
+    ss = np.sum(df.var() * (df.count() - 1))
+    return ss # return sum of sum of squares of each df variable
 
-clusters_preferences = pd.DataFrame(kmeans.labels_, columns=['Centroids'])
-clusters_preferences['ID'] = data[preferences].index
+
+
+def r2(df, labels):
+    sst = get_ss(df)
+    ssw = np.sum(df.groupby(labels).apply(get_ss))
+    return 1 - ssw/sst
+
+def get_r2_scores(df, clusterer, min_k=2, max_k=10):
+    """
+    Loop over different values of k. To be used with sklearn clusterers.
+    """
+    r2_clust = {}
+    for n in range(min_k, max_k):
+        clust = clone(clusterer).set_params(n_clusters=n)
+        labels = clust.fit_predict(df)
+        r2_clust[n] = r2(df, labels)
+    
+    return r2_clust
 ```
 
 ```python
-clusters_preferences
+Kmeans = KMeans()
+get_r2_scores(data[preferences], Kmeans)
+```
+
+```python
+# Libraries
+import matplotlib.pyplot as plt
+import pandas as pd
+from math import pi
+
+# Set data
+df = pd.DataFrame({
+    'group': ['A','B','C','D'],
+    'var1': [38, 1.5, 30, 4],
+    'var2': [29, 10, 9, 34],
+    'var3': [8, 39, 23, 24],
+    'var4': [7, 31, 33, 14],
+    'var5': [28, 15, 32, 14]
+    })
+
+# number of variable
+categories=list(df)[1:]
+N = len(categories)
+
+# We are going to plot the first line of the data frame.
+# But we need to repeat the first value to close the circular graph:
+values=df.loc[0].drop('group').values.flatten().tolist()
+values += values[:1]
+values
+
+# What will be the angle of each axis in the plot? (we divide the plot / number of variable)
+angles = [n / float(N) * 2 * pi for n in range(N)]
+angles += angles[:1]
+
+# Initialise the spider plot
+ax = plt.subplot(111, polar=True)
+
+# Draw one axe per variable + add labels labels yet
+plt.xticks(angles[:-1], categories, color='grey', size=8)
+
+# Draw ylabels
+ax.set_rlabel_position(0)
+plt.yticks([10,20,30], ["10","20","30"], color="grey", size=7)
+plt.ylim(0,40)
+
+# Plot data
+ax.plot(angles, values, linewidth=1, linestyle='solid')
+
+# Fill area
+ax.fill(angles, values, 'b', alpha=0.1)
 ```
 
 ## Population Characteristics
