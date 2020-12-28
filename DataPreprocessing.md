@@ -33,6 +33,9 @@ from pandas_profiling import ProfileReport
 from datetime import datetime
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.base import clone
+from scipy.cluster.hierarchy import dendrogram, linkage
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.manifold import TSNE
 
 %matplotlib inline
 pd.set_option('display.max_rows', 350)
@@ -527,6 +530,32 @@ plt.show()
 
 ## Clustering - Preferences
 
+```python
+def get_ss(df):
+    """Computes the sum of squares for all variables given a dataset
+    """
+    ss = np.sum(df.var() * (df.count() - 1))
+    return ss # return sum of sum of squares of each df variable
+
+
+
+def r2(df, labels):
+    sst = get_ss(df)
+    ssw = np.sum(df.groupby(labels).apply(get_ss))
+    return 1 - ssw/sst
+
+def get_r2_scores(df, clusterer, min_k=2, max_k=10):
+    """
+    Loop over different values of k. To be used with sklearn clusterers.
+    """
+    r2_clust = {}
+    for n in range(min_k, max_k):
+        clust = clone(clusterer).set_params(n_clusters=n)
+        labels = clust.fit_predict(df)
+        r2_clust[n] = r2(df, labels)
+    
+    return r2_clust
+```
 
 ### K-means
 
@@ -534,9 +563,6 @@ plt.show()
 preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
              'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
              'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
-# preferences=['VETERANS', 'BIBLE', 
-#              'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 
-#              'GARDENIN', 'WALKER']
 ```
 
 ```python
@@ -567,11 +593,7 @@ centroids=np.round(centroids, 4)
 ```
 
 ```python
-centroids[['VETERANS', 'WALKER', 'GARDENIN', 'CDPLAY', 'STEREO', 'PETS']]
-```
-
-```python
-centroids.var().sort_values()
+centroids
 ```
 
 ```python
@@ -579,36 +601,174 @@ data['Preferences_Kmeans'] = kmeans.labels_
 ```
 
 ```python
-def get_ss(df):
-    """Computes the sum of squares for all variables given a dataset
-    """
-    ss = np.sum(df.var() * (df.count() - 1))
-    return ss # return sum of sum of squares of each df variable
-
-
-
-def r2(df, labels):
-    sst = get_ss(df)
-    ssw = np.sum(df.groupby(labels).apply(get_ss))
-    return 1 - ssw/sst
-
-def get_r2_scores(df, clusterer, min_k=2, max_k=10):
-    """
-    Loop over different values of k. To be used with sklearn clusterers.
-    """
-    r2_clust = {}
-    for n in range(min_k, max_k):
-        clust = clone(clusterer).set_params(n_clusters=n)
-        labels = clust.fit_predict(df)
-        r2_clust[n] = r2(df, labels)
-    
-    return r2_clust
-```
-
-```python
 Kmeans = KMeans()
 get_r2_scores(data[preferences], Kmeans)
 ```
+
+# K-Means Followed by Hierarchical Clustering
+
+
+## K-Means
+
+```python
+k = 500
+```
+
+```python
+k_means_preferences = KMeans(n_clusters = k, init = 'k-means++', n_init = 10, max_iter = 500).fit(data[preferences])
+```
+
+```python
+centroids_preferences = k_means_preferences.cluster_centers_
+centroids_preferences = pd.DataFrame(centroids_preferences, columns = data[preferences].columns)
+```
+
+```python
+clusters_preferences = pd.DataFrame(k_means_preferences.labels_, columns = ['Centroids'])
+clusters_preferences['ID'] = data[preferences].index
+```
+
+```python
+centroids_preferences=np.round(centroids_preferences, 4)
+centroids_preferences
+```
+
+```python
+clusters_preferences
+```
+
+## Hierarchical Clustering on Top of K-Means
+
+```python
+def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
+    """This function computes the R2 for a set of cluster solutions given by the application of a hierarchical method.
+    The R2 is a measure of the homogenity of a cluster solution. It is based on SSt = SSw + SSb and R2 = SSb/SSt. 
+    
+    Parameters:
+    df (DataFrame): Dataset to apply clustering
+    link_method (str): either "ward", "complete", "average", "single"
+    max_nclus (int): maximum number of clusters to compare the methods
+    min_nclus (int): minimum number of clusters to compare the methods. Defaults to 1.
+    dist (str): distance to use to compute the clustering solution. Must be a valid distance. Defaults to "euclidean".
+    
+    Returns:
+    ndarray: R2 values for the range of cluster solutions
+    """
+    def get_ss(df):
+        ss = np.sum(df.var() * (df.count() - 1))
+        return ss  # return sum of sum of squares of each df variable
+    
+    sst = get_ss(df)  # get total sum of squares
+    
+    r2 = []  # where we will store the R2 metrics for each cluster solution
+    
+    for i in range(min_nclus, max_nclus+1):  # iterate over desired ncluster range
+        cluster = AgglomerativeClustering(n_clusters=i, affinity=dist, linkage=link_method)
+        hclabels = cluster.fit_predict(df) #get cluster labels
+        df_concat = pd.concat((df, pd.Series(hclabels, name='labels')), axis=1)  # concat df with labels
+        ssw_labels = df_concat.groupby(by='labels').apply(get_ss)  # compute ssw for each cluster labels
+        ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
+        r2.append(ssb / sst)  # save the R2 of the given cluster solution
+        
+    return np.array(r2)
+```
+
+```python
+# Prepare input
+hc_methods = ["ward", "complete", "average", "single"]
+# Call function defined above to obtain the R2 statistic for each hc_method
+max_nclus = 10
+r2_hc_methods = np.vstack([get_r2_hc(df=centroids_preferences, link_method = link, max_nclus=max_nclus) for link in hc_methods]).T
+r2_hc_methods = pd.DataFrame(r2_hc_methods, index=range(1, max_nclus + 1), columns=hc_methods)
+
+sns.set()
+# Plot data
+fig = plt.figure(figsize=(11,5))
+sns.lineplot(data=r2_hc_methods, linewidth=2.5, markers=["o"]*4)
+
+# Finalize the plot
+fig.suptitle("R2 plot for various hierarchical methods", fontsize=21)
+plt.gca().invert_xaxis()  # invert x axis
+plt.legend(title="HC methods", title_fontsize=11)
+plt.xticks(range(1, max_nclus + 1))
+plt.xlabel("Number of clusters", fontsize=13)
+plt.ylabel("R2 metric", fontsize=13)
+
+plt.show()
+```
+
+```python
+linkage = linkage(centroids_preferences, method = 'ward')
+```
+
+```python
+dendo = dendrogram(linkage)
+```
+
+```python
+Hierarchical = AgglomerativeClustering(n_clusters = 6, affinity = 'euclidean', linkage = 'ward')
+HC = Hierarchical.fit(centroids_preferences)
+labels = pd.DataFrame(HC.labels_).reset_index()
+labels.columns = ['Centroids', 'Cluster']
+```
+
+```python
+count_centroids = labels.groupby(by='Cluster')['Cluster'].count().reset_index(name='N')
+```
+
+```python
+KMeans_HC = clusters_preferences.merge(labels, how = 'inner', on = 'Centroids')
+KMeans_HC = data.merge(KMeans_HC[['ID','Cluster']], how = 'inner', left_on = data.index, right_on = 'ID')
+KMeans_HC.drop(columns = 'ID', inplace = True)
+KMeans_HC.rename(columns = {'Cluster': 'Preferences_K_Hierarchical'}, inplace=True)
+```
+
+```python
+KMeans_HC
+```
+
+```python
+centroids_KMHC = KMeans_HC.groupby('Preferences_K_Hierarchical')[preferences].mean()
+```
+
+```python
+count_KHC = KMeans_HC.Preferences_K_Hierarchical.value_counts()
+count_KHC = KMeans_HC.groupby(by='Preferences_K_Hierarchical')['Preferences_K_Hierarchical'].count().reset_index(name='N')
+```
+
+```python
+count_KHC
+```
+
+# T-SNE
+
+```python
+variavel_engracosa = TSNE(random_state = 5).fit_transform(KMeans_HC[preferences.append('Preferences_K_Hierarchical')])
+```
+
+```python
+pd.DataFrame(variavel_engracosa).plot.scatter(x = 0, y = 1, c = KMeans_HC['Preferences_K_Hierarchical'], colormap = 'tab10', fisixe = (15,10))
+```
+
+# SOM
+
+
+# Hierarchical Clustering on top of SOM
+
+
+# K-Means Clustering on top of SOM
+
+
+# KMODES
+
+
+# DBSCAN
+
+
+# Gaussian Mixture
+
+
+# Principal Components Analysis
 
 ```python
 # Libraries
