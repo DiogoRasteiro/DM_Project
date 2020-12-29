@@ -14,7 +14,43 @@ jupyter:
 ---
 
 ```python
-data=
+import os
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from scipy import stats
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_samples, silhouette_score
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import KNNImputer
+from pandas_profiling import ProfileReport
+from datetime import datetime
+from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.base import clone
+from scipy.cluster.hierarchy import dendrogram, linkage
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.manifold import TSNE
+import sompy
+from kmodes.kmodes import KModes
+from sompy.visualization.mapview import View2D
+from sompy.visualization.bmuhits import BmuHitsView
+from sompy.visualization.hitmap import HitMapView
+
+%matplotlib inline
+pd.set_option('display.max_rows', 350)
+```
+
+Data Preprocessed Importing
+
+```python
+data=pd.read_csv('data/donorsPreprocessed.csv')
+```
+
+```python
+data.drop(columns='Unnamed: 0', inplace=True)
 ```
 
 ### Data Partition- Cluster Perspectives
@@ -69,30 +105,16 @@ fig, axes = plt.subplots(4, int(len(preferences) / 4), figsize=(20, 20))
 # Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
 for ax, feat in zip(axes.flatten(), preferences): 
 # Notice the zip() function and flatten() method
-    sns.distplot(a=data[feat], ax=ax)
+    sns.countplot(x=data[feat], ax=ax)
 # Layout# Add a centered title to the figure:
-title = "Numeric Variables' Box Plots"
+title = "Preferences Vars"
 plt.suptitle(title)
         
 plt.show()
 ```
 
-Demography
-
 ```python
-# All Numeric Variables' Box Plots in one figure
-sns.set()
-# Prepare figure. Create individual axes where each box plot will be placed
-fig, axes = plt.subplots(20, int(len(demography) / 10), figsize=(20, 20))
-# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
-for ax, feat in zip(axes.flatten(), preferences): 
-# Notice the zip() function and flatten() method
-    sns.distplot(a=data[feat], ax=ax)
-# Layout# Add a centered title to the figure:
-title = "Numeric Variables' Box Plots"
-plt.suptitle(title)
-        
-plt.show()
+preferences=data[preferences].drop(columns=['KIDSTUFF', 'BOATS', 'HOMEE']).columns
 ```
 
 ## Feature Selection - Continuation
@@ -146,12 +168,6 @@ def get_r2_scores(df, clusterer, min_k=2, max_k=10):
 ### K-means
 
 ```python
-preferences=['COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 
-             'PETS', 'CDPLAY', 'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 
-             'FISHER', 'GARDENIN', 'BOATS', 'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES']
-```
-
-```python
 ## K Means
 inertia=[]
 k=range(2, 10)
@@ -187,21 +203,163 @@ data['Preferences_Kmeans'] = kmeans.labels_
 ```
 
 ```python
-Kmeans = KMeans()
+Kmeans = KMeans(random_state=45)
 get_r2_scores(data[preferences], Kmeans)
+```
+
+```python
+data['Preferences_Kmeans'].value_counts()
+```
+
+```python
+# Adapted from:
+# https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
+range_clusters=[3,4,6]
+# Storing average silhouette metric
+avg_silhouette = []
+for nclus in range_clusters:
+    # Skip nclus == 1
+    if nclus == 1:
+        continue
+
+    # Create a figure
+    fig = plt.figure(figsize=(13, 7))
+ 
+    # Initialize the KMeans object with n_clusters value and a random generator
+    # seed of 10 for reproducibility.
+    kmclust = KMeans(n_clusters=nclus,random_state=45)
+    cluster_labels = kmclust.fit_predict(data[preferences])
+ 
+    # The silhouette_score gives the average value for all the samples.
+    # This gives a perspective into the density and separation of the formed clusters
+    silhouette_avg = silhouette_score(data[preferences], cluster_labels)
+    avg_silhouette.append(silhouette_avg)
+    print(f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}")
+ 
+    # Compute the silhouette scores for each sample
+    sample_silhouette_values = silhouette_samples(data[preferences], cluster_labels)
+ 
+    y_lower = 10
+    for i in range(nclus):
+        # Aggregate the silhouette scores for samples belonging to cluster i, and sort them
+        ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
+        ith_cluster_silhouette_values.sort()
+
+        # Get y_upper to demarcate silhouette y range size
+        size_cluster_i = ith_cluster_silhouette_values.shape[0]
+        y_upper = y_lower + size_cluster_i
+
+        # Filling the silhouette
+        color = cm.nipy_spectral(float(i) / nclus)
+        plt.fill_betweenx(np.arange(y_lower, y_upper),
+                          0, ith_cluster_silhouette_values,
+                          facecolor=color, edgecolor=color, alpha=0.7)
+ 
+        # Label the silhouette plots with their cluster numbers at the middle
+        plt.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+ 
+        # Compute the new y_lower for next plot
+        y_lower = y_upper + 10  # 10 for the 0 samples
+ 
+    plt.title("The silhouette plot for the various clusters.")
+    plt.xlabel("The silhouette coefficient values")
+    plt.ylabel("Cluster label")
+ 
+    # The vertical line for average silhouette score of all the values
+    plt.axvline(x=silhouette_avg, color="red", linestyle="--")
+
+    # The silhouette coefficient can range from -1, 1
+    xmin, xmax = np.round(sample_silhouette_values.min() -0.1, 2), np.round(sample_silhouette_values.max() + 0.1, 2)
+    plt.xlim([xmin, xmax])
+
+    # The (nclus+1)*10 is for inserting blank space between silhouette
+    # plots of individual clusters, to demarcate them clearly.
+    plt.ylim([0, len(data[preferences]) + (nclus + 1) * 10])
+ 
+    plt.yticks([])  # Clear the yaxis labels / ticks
+    plt.xticks(np.arange(xmin, xmax, 0.1))
+```
+
+```python
+# Adapted from:
+# https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
+range_clusters=[5]
+# Storing average silhouette metric
+avg_silhouette = []
+for nclus in range_clusters:
+    # Skip nclus == 1
+    if nclus == 1:
+        continue
+
+    # Create a figure
+    fig = plt.figure(figsize=(13, 7))
+ 
+    # Initialize the KMeans object with n_clusters value and a random generator
+    # seed of 10 for reproducibility.
+    kmclust = KMeans(n_clusters=nclus,random_state=45)
+    cluster_labels = kmclust.fit_predict(data[preferences])
+ 
+    # The silhouette_score gives the average value for all the samples.
+    # This gives a perspective into the density and separation of the formed clusters
+    silhouette_avg = silhouette_score(data[preferences], cluster_labels)
+    avg_silhouette.append(silhouette_avg)
+    print(f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}")
+ 
+    # Compute the silhouette scores for each sample
+    sample_silhouette_values = silhouette_samples(data[preferences], cluster_labels)
+ 
+    y_lower = 10
+    for i in range(nclus):
+        # Aggregate the silhouette scores for samples belonging to cluster i, and sort them
+        ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
+        ith_cluster_silhouette_values.sort()
+
+        # Get y_upper to demarcate silhouette y range size
+        size_cluster_i = ith_cluster_silhouette_values.shape[0]
+        y_upper = y_lower + size_cluster_i
+
+        # Filling the silhouette
+        color = cm.nipy_spectral(float(i) / nclus)
+        plt.fill_betweenx(np.arange(y_lower, y_upper),
+                          0, ith_cluster_silhouette_values,
+                          facecolor=color, edgecolor=color, alpha=0.7)
+ 
+        # Label the silhouette plots with their cluster numbers at the middle
+        plt.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+ 
+        # Compute the new y_lower for next plot
+        y_lower = y_upper + 10  # 10 for the 0 samples
+ 
+    plt.title("The silhouette plot for the various clusters.")
+    plt.xlabel("The silhouette coefficient values")
+    plt.ylabel("Cluster label")
+ 
+    # The vertical line for average silhouette score of all the values
+    plt.axvline(x=silhouette_avg, color="red", linestyle="--")
+
+    # The silhouette coefficient can range from -1, 1
+    xmin, xmax = np.round(sample_silhouette_values.min() -0.1, 2), np.round(sample_silhouette_values.max() + 0.1, 2)
+    plt.xlim([xmin, xmax])
+
+    # The (nclus+1)*10 is for inserting blank space between silhouette
+    # plots of individual clusters, to demarcate them clearly.
+    plt.ylim([0, len(data[preferences]) + (nclus + 1) * 10])
+ 
+    plt.yticks([])  # Clear the yaxis labels / ticks
+    plt.xticks(np.arange(xmin, xmax, 0.1))
 ```
 
 # K-Means Followed by Hierarchical Clustering
 
 
-## K-Means
+### K-Means
 
 ```python
 k = 500
 ```
 
 ```python
-k_means_preferences = KMeans(n_clusters = k, init = 'k-means++', n_init = 10, max_iter = 500).fit(data[preferences])
+k_means_preferences = KMeans(random_state=10, n_clusters = k, init = 'k-means++', n_init = 10, max_iter = 500).fit(data[preferences])
 ```
 
 ```python
@@ -223,7 +381,7 @@ centroids_preferences
 clusters_preferences
 ```
 
-## Hierarchical Clustering on Top of K-Means
+### Hierarchical Clustering
 
 ```python
 def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
@@ -264,7 +422,7 @@ def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
 hc_methods = ["ward", "complete", "average", "single"]
 # Call function defined above to obtain the R2 statistic for each hc_method
 max_nclus = 10
-r2_hc_methods = np.vstack([get_r2_hc(df=centroids_preferences, link_method = link, max_nclus=max_nclus) for link in hc_methods]).T
+r2_hc_methods = np.vstack([get_r2_hc(df=centroids_preferences.copy(), link_method = link, max_nclus=max_nclus) for link in hc_methods]).T
 r2_hc_methods = pd.DataFrame(r2_hc_methods, index=range(1, max_nclus + 1), columns=hc_methods)
 
 sns.set()
@@ -284,15 +442,17 @@ plt.show()
 ```
 
 ```python
-linkage = linkage(centroids_preferences, method = 'ward')
+link =linkage(centroids_preferences, method = 'ward')
 ```
 
 ```python
-dendo = dendrogram(linkage)
+dendo = dendrogram(link, color_threshold=7.1)
+plt.axhline(7.1, linestyle='--')
+plt.show()
 ```
 
 ```python
-Hierarchical = AgglomerativeClustering(n_clusters = 6, affinity = 'euclidean', linkage = 'ward')
+Hierarchical = AgglomerativeClustering(n_clusters = 6, affinity = 'euclidean', linkage = 'average')
 HC = Hierarchical.fit(centroids_preferences)
 labels = pd.DataFrame(HC.labels_).reset_index()
 labels.columns = ['Centroids', 'Cluster']
@@ -326,27 +486,189 @@ count_KHC = KMeans_HC.groupby(by='Preferences_K_Hierarchical')['Preferences_K_Hi
 count_KHC
 ```
 
-# T-SNE
-
-```python
-variavel_engracosa = TSNE(random_state = 5).fit_transform(KMeans_HC[preferences.append('Preferences_K_Hierarchical')])
-```
-
-```python
-pd.DataFrame(variavel_engracosa).plot.scatter(x = 0, y = 1, c = KMeans_HC['Preferences_K_Hierarchical'], colormap = 'tab10', fisixe = (15,10))
-```
-
 # SOM
 
+```python
+np.random.seed(42)
 
-# Hierarchical Clustering on top of SOM
+sm = sompy.SOMFactory().build(
+    data[preferences].values, 
+    mapsize=(20,20),
+    initialization='random', 
+    neighborhood='gaussian',
+    training='batch',
+    lattice='hexa',
+    component_names=preferences
+)
+sm.train(n_job=4, verbose='info', train_rough_len=100, train_finetune_len=100)
+```
 
+```python
+sm.get_node_vectors()
+
+# Component planes on the 50x50 grid
+sns.set()
+view2D = View2D(12,12,"", text_size=10)
+view2D.show(sm, col_sz=3, what='codebook')
+plt.subplots_adjust(top=0.90)
+plt.suptitle("Component Planes", fontsize=20)
+plt.show()
+```
+
+```python
+# U-matrix of the 50x50 grid
+u = sompy.umatrix.UMatrixView(12, 12, 'umatrix', show_axis=True, text_size=8, show_text=True)
+
+UMAT = u.show(
+    sm, 
+    distance2=1, 
+    row_normalized=False, 
+    show_data=False, 
+    contooor=True # Visualize isomorphic curves
+)
+```
+
+```python
+som_clusters = pd.DataFrame(sm._data, columns=preferences).set_index(data.index)
+som_labels = pd.DataFrame(sm._bmu[0], columns=['SOM_Preferences']).set_index(data.index)
+som_clusters = pd.concat([som_clusters, som_labels], axis=1)
+```
+
+```python
+som_clusters
+```
 
 # K-Means Clustering on top of SOM
 
+```python
+# Perform K-Means clustering on top of the 2500 untis (sm.get_node_vectors() output)
+kmeans = KMeans(n_clusters=6, init='k-means++', n_init=20, random_state=42)
+nodeclus_labels = sm.cluster(kmeans)
+
+ 
+
+hits  = HitMapView(12, 12,"Clustering", text_size=10)
+hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
+
+ 
+
+plt.show()
+```
+
+```python
+# Check the nodes and and respective clusters
+nodes = sm.get_node_vectors()
+
+df_nodes = pd.DataFrame(nodes, columns=preferences)
+df_nodes['label'] = nodeclus_labels
+df_nodes
+```
+
+```python
+# Obtaining SOM's BMUs labels
+bmus_map = sm.find_bmu(data[preferences])[0]  # get bmus for each observation in df
+
+df_bmus = pd.DataFrame(
+    np.concatenate((data[preferences], np.expand_dims(bmus_map,1)), axis=1),
+    index=data.index, columns=np.append(preferences,"BMU")
+)
+df_bmus
+```
+
+```python
+cent_k_som = df_bmus.merge(df_nodes['label'], 'left', left_on="BMU", right_index=True)
+cent_k_som
+```
+
+```python
+cent_k_som.drop(columns='BMU').groupby('label').mean()
+```
+
+```python
+def get_ss(df):
+    ss = np.sum(df.var() * (df.count() - 1))
+    return ss  # return sum of sum of squares of each df variable
+
+sst = get_ss(cent_k_som[preferences])  # get total sum of squares
+ssw_labels = cent_k_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
+ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
+r2_score = ssb / sst
+r2_score
+```
+
+# Hierarchical Clustering on top of SOM
+
+```python
+hierclust = AgglomerativeClustering(n_clusters=6, linkage='ward')
+nodeclus_labels = sm.cluster(hierclust)
+
+ 
+
+hits  = HitMapView(12, 12,"Clustering",text_size=10)
+hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
+
+ 
+
+plt.show()
+```
+
+```python
+# Check the nodes and and respective clusters
+nodes = sm.get_node_vectors()
+
+df_nodes = pd.DataFrame(nodes, columns=preferences)
+df_nodes['label'] = nodeclus_labels
+df_nodes
+```
+
+```python
+# Obtaining SOM's BMUs labels
+bmus_map = sm.find_bmu(data[preferences])[0]  # get bmus for each observation in df
+
+df_bmus = pd.DataFrame(
+    np.concatenate((data[preferences], np.expand_dims(bmus_map,1)), axis=1),
+    index=data.index, columns=np.append(preferences,"BMU")
+)
+df_bmus
+```
+
+```python
+cent_hc_som = df_bmus.merge(df_nodes['label'], 'left', left_on="BMU", right_index=True)
+cent_hc_som
+```
+
+```python
+cent_hc_som.drop(columns='BMU').groupby('label').mean()
+```
+
+```python
+
+sst = get_ss(cent_hc_som[preferences])  # get total sum of squares
+ssw_labels = cent_hc_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
+ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
+r2 = ssb / sst
+r2
+```
 
 # KMODES
 
+```python
+
+```
+
+```python
+km = KModes(n_clusters=6, init='Huang', n_init=5, verbose=1)
+
+clusters = km.fit_predict(data[preferences])
+
+# Print the cluster centroids
+print(km.cluster_centroids_)
+```
+
+```python
+kmodes_cent=pd.DataFrame(km.cluster_centroids_, columns=preferences)
+kmodes_cent
+```
 
 # DBSCAN
 
@@ -355,6 +677,17 @@ pd.DataFrame(variavel_engracosa).plot.scatter(x = 0, y = 1, c = KMeans_HC['Prefe
 
 
 # Principal Components Analysis
+
+
+# T-SNE
+
+```python
+tsne = TSNE(random_state = 5).fit_transform(KMeans_HC[preferences.append('Preferences_K_Hierarchical')])
+```
+
+```python
+pd.DataFrame(tsne).plot.scatter(x = 0, y = 1, c = KMeans_HC['Preferences_K_Hierarchical'], colormap = 'tab10', fisixe = (15,10))
+```
 
 ```python
 # Libraries

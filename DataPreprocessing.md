@@ -52,7 +52,7 @@ data_backup=pd.read_csv('data/donors.csv')
 ```
 
 ```python
-data
+data.set_index('CONTROLN', drop=True, inplace=True)
 ```
 
 ```python
@@ -113,8 +113,7 @@ features_to_delete = [
     'RECSWEEP', # Not pertinent
     'CHILD03', 'CHILD07', 'CHILD12', 'CHILD18', # Values are mostly empty, and don't give much info
     'GEOCODE', # Not pertinent
-    'HPHONE_D', 
-    'CONTROLN',
+    'HPHONE_D',
     'MSA',
     'ADI',
     'DMA',
@@ -434,5 +433,7 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 ```python
 data.to_csv('data/donorsPreprocessed.csv', index=True)
 ```
+
+
 
 
