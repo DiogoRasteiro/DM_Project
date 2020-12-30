@@ -384,15 +384,7 @@ data['URB_LVL_S'].value_counts()
 ```
 
 ```python
-data1_backup=data1.copy()
-```
-
-```python
-data_backup=data.copy()
-```
-
-```python
-data=data1.copy()
+data['SOCIO_ECO']=data['SOCIO_ECO_1']+(2*data['SOCIO_ECO_2'])+(3*data['SOCIO_ECO_3'])+(4*data['SOCIO_ECO_4'])
 ```
 
 # Coherence Check
@@ -409,6 +401,22 @@ data['SOCIO_COH'].value_counts()
 
 ```python
 data.drop(columns=['SOCIO_COH','URB_COH'], inplace=True)
+```
+
+```python
+data.drop(columns=['SOCIO_ECO_1','SOCIO_ECO_2','SOCIO_ECO_3','SOCIO_ECO_4'])
+```
+
+```python
+data1_backup=data1.copy()
+```
+
+```python
+data_backup=data.copy()
+```
+
+```python
+data=data1.copy()
 ```
 
 # Correlation Analysis
@@ -433,6 +441,8 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 ```python
 data.to_csv('data/donorsPreprocessed.csv', index=True)
 ```
+
+
 
 
 

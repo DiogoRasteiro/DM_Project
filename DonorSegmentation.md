@@ -21,9 +21,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy import stats
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans,DBSCAN
 from sklearn.metrics import silhouette_samples, silhouette_score
-from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neighbors import KNeighborsRegressor,NearestNeighbors
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import KNNImputer
 from pandas_profiling import ProfileReport
@@ -33,7 +33,10 @@ from sklearn.base import clone
 from scipy.cluster.hierarchy import dendrogram, linkage
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+
 import sompy
+from scipy.spatial import distance
 from kmodes.kmodes import KModes
 from sompy.visualization.mapview import View2D
 from sompy.visualization.bmuhits import BmuHitsView
@@ -87,7 +90,7 @@ value=['RECINHSE', 'RECP3', 'GENDER', 'HIT', 'MAJOR', 'PEPSTRFL', 'CARDPROM', 'C
        'MAXRDATE_DAYS', 'DAYS_PER_GIFT']
 ```
 
-# Outlier Analysis
+# Feature Selection
 
 
 Preferences
@@ -116,8 +119,6 @@ plt.show()
 ```python
 preferences=data[preferences].drop(columns=['KIDSTUFF', 'BOATS', 'HOMEE']).columns
 ```
-
-## Feature Selection - Continuation
 
 ```python
 # Prepare figure
@@ -183,7 +184,7 @@ plt.show()
 ```
 
 ```python
-kmeans=KMeans(n_clusters=6, random_state=45).fit(data[preferences])
+kmeans=KMeans(n_clusters=6, random_state=45,).fit(data[preferences])
 ```
 
 ```python
@@ -214,76 +215,7 @@ data['Preferences_Kmeans'].value_counts()
 ```python
 # Adapted from:
 # https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-range_clusters=[3,4,6]
-# Storing average silhouette metric
-avg_silhouette = []
-for nclus in range_clusters:
-    # Skip nclus == 1
-    if nclus == 1:
-        continue
-
-    # Create a figure
-    fig = plt.figure(figsize=(13, 7))
- 
-    # Initialize the KMeans object with n_clusters value and a random generator
-    # seed of 10 for reproducibility.
-    kmclust = KMeans(n_clusters=nclus,random_state=45)
-    cluster_labels = kmclust.fit_predict(data[preferences])
- 
-    # The silhouette_score gives the average value for all the samples.
-    # This gives a perspective into the density and separation of the formed clusters
-    silhouette_avg = silhouette_score(data[preferences], cluster_labels)
-    avg_silhouette.append(silhouette_avg)
-    print(f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}")
- 
-    # Compute the silhouette scores for each sample
-    sample_silhouette_values = silhouette_samples(data[preferences], cluster_labels)
- 
-    y_lower = 10
-    for i in range(nclus):
-        # Aggregate the silhouette scores for samples belonging to cluster i, and sort them
-        ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
-        ith_cluster_silhouette_values.sort()
-
-        # Get y_upper to demarcate silhouette y range size
-        size_cluster_i = ith_cluster_silhouette_values.shape[0]
-        y_upper = y_lower + size_cluster_i
-
-        # Filling the silhouette
-        color = cm.nipy_spectral(float(i) / nclus)
-        plt.fill_betweenx(np.arange(y_lower, y_upper),
-                          0, ith_cluster_silhouette_values,
-                          facecolor=color, edgecolor=color, alpha=0.7)
- 
-        # Label the silhouette plots with their cluster numbers at the middle
-        plt.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
- 
-        # Compute the new y_lower for next plot
-        y_lower = y_upper + 10  # 10 for the 0 samples
- 
-    plt.title("The silhouette plot for the various clusters.")
-    plt.xlabel("The silhouette coefficient values")
-    plt.ylabel("Cluster label")
- 
-    # The vertical line for average silhouette score of all the values
-    plt.axvline(x=silhouette_avg, color="red", linestyle="--")
-
-    # The silhouette coefficient can range from -1, 1
-    xmin, xmax = np.round(sample_silhouette_values.min() -0.1, 2), np.round(sample_silhouette_values.max() + 0.1, 2)
-    plt.xlim([xmin, xmax])
-
-    # The (nclus+1)*10 is for inserting blank space between silhouette
-    # plots of individual clusters, to demarcate them clearly.
-    plt.ylim([0, len(data[preferences]) + (nclus + 1) * 10])
- 
-    plt.yticks([])  # Clear the yaxis labels / ticks
-    plt.xticks(np.arange(xmin, xmax, 0.1))
-```
-
-```python
-# Adapted from:
-# https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-range_clusters=[5]
+range_clusters=[3,6]
 # Storing average silhouette metric
 avg_silhouette = []
 for nclus in range_clusters:
@@ -592,8 +524,8 @@ def get_ss(df):
 sst = get_ss(cent_k_som[preferences])  # get total sum of squares
 ssw_labels = cent_k_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
 ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score = ssb / sst
-r2_score
+r2_score_k_som = ssb / sst
+r2_score_k_som
 ```
 
 # Hierarchical Clustering on top of SOM
@@ -642,22 +574,33 @@ cent_hc_som.drop(columns='BMU').groupby('label').mean()
 ```
 
 ```python
-
 sst = get_ss(cent_hc_som[preferences])  # get total sum of squares
 ssw_labels = cent_hc_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
 ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2 = ssb / sst
-r2
+r2_score_hc = ssb / sst
+r2_score_hc
 ```
 
 # KMODES
 
 ```python
-
+## K Modes
+costs=[]
+k=range(2, 7)
+for i in k:
+        kM = KModes(n_clusters=i, init='Huang')
+        cls = kM.fit_predict(data[preferences])
+        costs.append(kM.cost_)
+        
+plt.plot(k, costs, 'bx-')
+plt.xlabel('k')
+plt.ylabel('Cost')
+plt.title('The Elbow Method showing the optimal k')
+plt.show()
 ```
 
 ```python
-km = KModes(n_clusters=6, init='Huang', n_init=5, verbose=1)
+km = KModes(n_clusters=5, random_state=45, init='Huang', verbose=1)
 
 clusters = km.fit_predict(data[preferences])
 
@@ -670,13 +613,131 @@ kmodes_cent=pd.DataFrame(km.cluster_centroids_, columns=preferences)
 kmodes_cent
 ```
 
+```python
+data['Preferences_KModes']=clusters
+```
+
+```python
+data['Preferences_KModes'].value_counts()
+```
+
+```python
+r2(data[preferences],data['Preferences_KModes'])
+```
+
 # DBSCAN
 
+```python
+neigh = NearestNeighbors(n_neighbors=50, metric='hamming')
+neigh.fit(data[preferences])
+distances, _ = neigh.kneighbors(data[preferences])
+distances = np.sort(distances[:, -1])
+plt.plot(distances)
+plt.show()
+```
+
+```python
+dbscan=DBSCAN(eps=0.07, min_samples=50, metric='hamming', n_jobs=4)
+clusters=dbscan.fit(data[preferences])
+```
+
+# K Means on top of Principal Components Analysis
+
+```python
+data_pca=data[preferences].copy()
+```
+
+```python
+pca=PCA(n_components='mle', random_state=45).fit(data_pca)
+```
+
+```python
+pd.DataFrame(
+    {"Eigenvalue": pca.explained_variance_,
+     "Difference": np.insert(np.diff(pca.explained_variance_), 0, 0),
+     "Proportion": pca.explained_variance_ratio_,
+     "Cumulative": np.cumsum(pca.explained_variance_ratio_)},
+    index=range(1, pca.n_components_ + 1)
+)
+```
+
+```python
+pca=PCA(n_components=9, random_state=45)
+pca_feat = pca.fit_transform(data_pca)
+pca_feat_names = [f"PC{i}" for i in range(pca.n_components_)]
+pca_df = pd.DataFrame(pca_feat, index=data_pca.index, columns=pca_feat_names)  # remember index=df_pca.index
+pca_df
+```
+
+```python
+data_pca = pd.concat([data_pca, pca_df], axis=1)
+data_pca.head()
+```
+
+```python
+def _color_red_or_green(val):
+    if val < -0.45:
+        color = 'background-color: red'
+    elif val > 0.45:
+        color = 'background-color: green'
+    else:
+        color = ''
+    return color
+
+# Interpreting each Principal Component
+loadings = data_pca.corr().loc[preferences, pca_feat_names]
+loadings.style.applymap(_color_red_or_green)
+```
+
+```python
+data_pca.drop(columns=['PC1','PC4', 'PC5','PC6'], inplace=True)
+```
+
+```python
+principal_components=['PC0','PC2','PC3','PC7','PC8']
+```
+
+```python
+inertia=[]
+k=range(2, 10)
+for i in k:
+        kmeans=KMeans(n_clusters=i, random_state=45).fit(data_pca[principal_components])
+        inertia.append(kmeans.inertia_)
+        
+plt.plot(k, inertia, 'bx-')
+plt.xlabel('k')
+plt.ylabel('Inertia')
+plt.title('The Elbow Method showing the optimal k')
+plt.show()
+```
+
+```python
+kmeans=KMeans(n_clusters=5, random_state=45).fit(data_pca[principal_components])
+clusters_PCA=pd.DataFrame(kmeans.cluster_centers_, columns=principal_components)
+```
+
+```python
+labels=kmeans.predict(data_pca[principal_components])
+```
+
+```python
+data_pca['PCA_Clusters']=labels
+```
+
+```python
+data_pca.groupby('PCA_Clusters').mean()
+```
+
+```python
+data_pca['PCA_Clusters'].value_counts()
+```
+
+```python
+r2_pca=r2(data_pca,'PCA_Clusters')
+r2_pca
+```
 
 # Gaussian Mixture
-
-
-# Principal Components Analysis
 
 
 # T-SNE
@@ -735,6 +796,93 @@ ax.plot(angles, values, linewidth=1, linestyle='solid')
 
 # Fill area
 ax.fill(angles, values, 'b', alpha=0.1)
+```
+
+# Demographics
+
+```python
+data[demography]
+```
+
+# Feature Selection
+
+
+Demography
+
+```python
+binary_cols=data[demography].apply(lambda x: max(x)==1, 0)
+binary_cols=data[demography].loc[:, binary_cols].columns
+```
+
+```python
+# All Numeric Variables' Box Plots in one figure
+sns.set()
+# Prepare figure. Create individual axes where each box plot will be placed
+fig, axes = plt.subplots(4, int(len(binary_cols) / 4), figsize=(20, 20))
+# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
+for ax, feat in zip(axes.flatten(), binary_cols): 
+# Notice the zip() function and flatten() method
+    sns.countplot(x=data[feat], ax=ax)
+# Layout# Add a centered title to the figure:
+title = "Preferences Vars"
+plt.suptitle(title)
+        
+plt.show()
+```
+
+```python
+data['PERCGOV']=data['LOCALGOV']+data['STATEGOV']+data['FEDGOV']
+```
+
+```python
+data['PERCMINORITY']=100-data['ETH1']
+```
+
+```python
+demography_kept=['is_male','MALEMILI', 'MALEVET', 'VIETVETS', 'WWIIVETS','PERCGOV',
+                 'POP901','PERCMINORITY','AGE901','MARR1','HV1','HU3','HHD4','IC1','LFC1',
+                 'EC1','SEC1','AFC1','POBC1','URB_LVL_S','URB_LVL_R','URB_LVL_C','URB_LVL_T','SOCIO_ECO']
+```
+
+```python
+# Prepare figure
+fig = plt.figure(figsize=(20, 20))
+# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
+corr = np.round(data[demography_kept].corr(method="spearman"), decimals=2)
+# Build annotation matrix (values above |0.5| will appear annotated in the plot)
+mask_annot = np.absolute(corr.values) >= 0.5
+annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
+# Plot heatmap of the correlation matrix
+sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
+            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
+# Layout
+fig.subplots_adjust(top=0.95)
+fig.suptitle("Correlation Matrix", fontsize=20)
+plt.show()
+```
+
+```python
+###################################################################################################
+
+#fea_to_del=['HV1', 'AFC1','EC1', 'SOCIO_ECO_1', 'POBC1', 'MARR1', 'SEC1', 'LFC1']
+```
+
+```python
+demography_kept=data[demography_kept].drop(columns=fea_to_del).columns
+```
+
+```python
+metric_cols=data[demography_kept].apply(lambda x: max(x)>1, 0)
+metric_cols=data[demography_kept].loc[:, metric_cols].columns
+```
+
+```python
+pair=sns.pairplot(data[metric_cols])
+plt.show()
+```
+
+```python
+len(demography_kept)
 ```
 
 ## Population Characteristics
