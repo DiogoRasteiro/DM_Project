@@ -18,6 +18,7 @@ import os
 import pandas as pd
 import numpy as np
 import seaborn as sns
+sns.set()
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy import stats
@@ -223,54 +224,23 @@ def visualize_clusters(data):
 
 ```
 
-# Feature Selection
-
-
-Preferences
-
 ```python
-binary_cols=data.apply(lambda x: max(x)==1, 0)
-binary_cols=data.loc[:, binary_cols].columns
+def generate_corr_matrix(df):
+    # Prepare figure
+    fig = plt.figure(figsize=(20, 20))
+    # Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
+    corr = np.round(df.corr(method="spearman"), decimals=2)
+    # Build annotation matrix (values above |0.5| will appear annotated in the plot)
+    mask_annot = np.absolute(corr.values) >= 0.5
+    annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
+    # Plot heatmap of the correlation matrix
+    sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
+                fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
+    # Layout
+    fig.subplots_adjust(top=0.95)
+    fig.suptitle("Correlation Matrix", fontsize=20)
+    plt.show()
 ```
-
-```python
-# All Numeric Variables' Box Plots in one figure
-sns.set()
-# Prepare figure. Create individual axes where each box plot will be placed
-fig, axes = plt.subplots(4, int(len(preferences) / 4), figsize=(20, 20))
-# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
-for ax, feat in zip(axes.flatten(), preferences): 
-# Notice the zip() function and flatten() method
-    sns.countplot(x=data[feat], ax=ax)
-# Layout# Add a centered title to the figure:
-title = "Preferences Vars"
-plt.suptitle(title)
-        
-plt.show()
-```
-
-```python
-preferences=data[preferences].drop(columns=['KIDSTUFF', 'BOATS', 'HOMEE']).columns
-```
-
-```python
-# Prepare figure
-fig = plt.figure(figsize=(20, 20))
-# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
-corr = np.round(data[preferences].corr(method="spearman"), decimals=2)
-# Build annotation matrix (values above |0.5| will appear annotated in the plot)
-mask_annot = np.absolute(corr.values) >= 0.5
-annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
-# Plot heatmap of the correlation matrix
-sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
-            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
-# Layout
-fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
-plt.show()
-```
-
-## Clustering - Preferences
 
 ```python
 def get_ss(df):
@@ -281,55 +251,258 @@ def get_ss(df):
 
 
 
-def r2(df, labels):
+def r2_calculator(df, labels):
     sst = get_ss(df)
     ssw = np.sum(df.groupby(labels).apply(get_ss))
     return 1 - ssw/sst
 
-def get_r2_scores(df, clusterer, min_k=2, max_k=10):
+def get_r2_scores(df, clusterer, min_k=2, max_k=10, labels=None):
     """
     Loop over different values of k. To be used with sklearn clusterers.
     """
     r2_clust = {}
     for n in range(min_k, max_k):
-        clust = clone(clusterer).set_params(n_clusters=n)
-        labels = clust.fit_predict(df)
-        r2_clust[n] = r2(df, labels)
+        if labels is None:
+            clust = clone(clusterer).set_params(n_clusters=n)
+            labels = clust.fit_predict(df)
+        r2_clust[n] = r2_calculator(df, labels)
     
     return r2_clust
 ```
 
+```python
+def plot_inertia(df, clusterer, n_start, n_stop):
+    ## K Means
+    inertia=[]
+    k=range(n_start, n_stop)
+    for i in k:
+            clusters=clusterer(n_clusters=i, random_state=45).fit(df)
+            try:
+                inertia.append(clusters.inertia_)
+            except:
+                inertia.append(clusters.cost_)
+
+    plt.plot(k, inertia, 'bx-')
+    plt.xlabel('k')
+    plt.ylabel('Inertia')
+    plt.title('The Elbow Method showing the optimal k')
+    plt.show()
+```
+
+```python
+def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
+    """This function computes the R2 for a set of cluster solutions given by the application of a hierarchical method.
+    The R2 is a measure of the homogenity of a cluster solution. It is based on SSt = SSw + SSb and R2 = SSb/SSt. 
+    
+    Parameters:
+    df (DataFrame): Dataset to apply clustering
+    link_method (str): either "ward", "complete", "average", "single"
+    max_nclus (int): maximum number of clusters to compare the methods
+    min_nclus (int): minimum number of clusters to compare the methods. Defaults to 1.
+    dist (str): distance to use to compute the clustering solution. Must be a valid distance. Defaults to "euclidean".
+    
+    Returns:
+    ndarray: R2 values for the range of cluster solutions
+    """
+    sst = get_ss_no_label(df)  # get total sum of squares
+    
+    r2 = []  # where we will store the R2 metrics for each cluster solution
+    
+    for i in range(min_nclus, max_nclus+1):  # iterate over desired ncluster range
+        cluster = AgglomerativeClustering(n_clusters=i, affinity=dist, linkage=link_method)
+        hclabels = cluster.fit_predict(df) #get cluster labels
+        df_concat = pd.concat((df, pd.Series(hclabels, name='labels')), axis=1)  # concat df with labels
+        ssw_labels = df_concat.groupby(by='labels').apply(get_ss_no_label)  # compute ssw for each cluster labels
+        ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
+        r2.append(ssb / sst)  # save the R2 of the given cluster solution
+        
+    return np.array(r2)
+```
+
+```python
+def get_ss_no_label(df):
+    ss = np.sum(df.var() * (df.count() - 1))
+    return ss  # return sum of sum of squares of each df variable
+```
+
+```python
+def r2_calc_label(cluster_data, cols, label='label'):
+    sst = get_ss_no_label(cluster_data[cols])  # get total sum of squares
+    ssw_labels = cluster_data[cols.to_list() + [label]].groupby(
+        by=label).apply(get_ss)  # compute ssw for each cluster labels
+    ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
+    return ssb / sst
+```
+
+```python
+def generate_count_plots(df, title='Count Plots'):
+    # Prepare figure. Create individual axes where each plot will be placed
+    fig, axes = plt.subplots(4, int(len(df.columns) / 4), figsize=(20, 20))
+    
+    # Plot data# Iterate across axes objects and associate each box plot
+    for ax, feat in zip(axes.flatten(), df.columns):
+        # Notice the zip() function and flatten() method
+        sns.countplot(x=df[feat], ax=ax)
+
+    # Layout# Add a centered title to the figure:
+    plt.suptitle(title)
+    plt.show()
+```
+
+```python
+def generate_silhouette_plots(df, clusterer, range_clusters):
+    # Adapted from:
+    # https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis
+
+    # Storing average silhouette metric
+    avg_silhouette = []
+    for nclus in range_clusters:
+        # Create a figure
+        fig = plt.figure(figsize=(13, 7))
+
+        curr_clusterer = clone(clusterer).set_params(n_clusters=nclus)
+        cluster_labels = curr_clusterer.fit_predict(data[preferences])
+
+        # The silhouette_score gives the average value for all the samples.
+        # This gives a perspective into the density and separation of the formed clusters
+        silhouette_avg = silhouette_score(data[preferences], cluster_labels)
+        avg_silhouette.append(silhouette_avg)
+        print(
+            f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}"
+        )
+
+        # Compute the silhouette scores for each sample
+        sample_silhouette_values = silhouette_samples(df, cluster_labels)
+
+        y_lower = 10
+        for i in range(nclus):
+            # Aggregate the silhouette scores for samples belonging to cluster i, and sort them
+            ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
+            ith_cluster_silhouette_values.sort()
+
+            # Get y_upper to demarcate silhouette y range size
+            size_cluster_i = ith_cluster_silhouette_values.shape[0]
+            y_upper = y_lower + size_cluster_i
+
+            # Filling the silhouette
+            color = cm.nipy_spectral(float(i) / nclus)
+            plt.fill_betweenx(np.arange(y_lower, y_upper),
+                              0,
+                              ith_cluster_silhouette_values,
+                              facecolor=color,
+                              edgecolor=color,
+                              alpha=0.7)
+
+            # Label the silhouette plots with their cluster numbers at the middle
+            plt.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+
+            # Compute the new y_lower for next plot
+            y_lower = y_upper + 10  # 10 for the 0 samples
+
+        plt.title("The silhouette plot for the various clusters.")
+        plt.xlabel("The silhouette coefficient values")
+        plt.ylabel("Cluster label")
+
+        # The vertical line for average silhouette score of all the values
+        plt.axvline(x=silhouette_avg, color="red", linestyle="--")
+
+        # The silhouette coefficient can range from -1, 1
+        xmin, xmax = np.round(sample_silhouette_values.min() - 0.1,
+                              2), np.round(
+                                  sample_silhouette_values.max() + 0.1, 2)
+        plt.xlim([xmin, xmax])
+
+        # The (nclus+1)*10 is for inserting blank space between silhouette
+        # plots of individual clusters, to demarcate them clearly.
+        plt.ylim([0, len(data[preferences]) + (nclus + 1) * 10])
+
+        plt.yticks([])  # Clear the yaxis labels / ticks
+        plt.xticks(np.arange(xmin, xmax, 0.1))
+```
+
+```python
+def generate_hc_methods_plot(df):
+    # Prepare input
+    hc_methods = ["ward", "complete", "average", "single"]
+    # Call function defined above to obtain the R2 statistic for each hc_method
+    max_nclus = 10
+    r2_hc_methods = np.vstack([
+        get_r2_hc(df=df.copy(), link_method=link,
+                  max_nclus=max_nclus) for link in hc_methods
+    ]).T
+    r2_hc_methods = pd.DataFrame(r2_hc_methods,
+                                 index=range(1, max_nclus + 1),
+                                 columns=hc_methods)
+
+    sns.set()
+    # Plot data
+    fig = plt.figure(figsize=(11, 5))
+    sns.lineplot(data=r2_hc_methods, linewidth=2.5, markers=["o"] * 4)
+
+    # Finalize the plot
+    fig.suptitle("R2 plot for various hierarchical methods", fontsize=21)
+    plt.gca().invert_xaxis()  # invert x axis
+    plt.legend(title="HC methods", title_fontsize=11)
+    plt.xticks(range(1, max_nclus + 1))
+    plt.xlabel("Number of clusters", fontsize=13)
+    plt.ylabel("R2 metric", fontsize=13)
+
+    plt.show()
+```
+
+```python
+def generate_dendrogram(df, hc_method):
+    link = linkage(df, method=hc_method)
+    dendo = dendrogram(link, color_threshold=7.1)
+    plt.axhline(7.1, linestyle='--')
+    plt.show()
+```
+
+```python
+def generate_hit_map(sm):
+    hits  = HitMapView(12, 12,"Clustering", text_size=10)
+    hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
+    plt.show()
+```
+
+# Feature Selection
+
+
+Preferences
+
+```python
+binary_cols = data.apply(lambda x: max(x) == 1, 0)
+binary_cols = data.loc[:, binary_cols].columns
+```
+
+```python
+generate_count_plots(data[preferences], 'Preference Perspective')
+```
+
+```python
+preferences=data[preferences].drop(columns=['KIDSTUFF', 'BOATS', 'HOMEE']).columns
+```
+
+```python
+generate_corr_matrix(data[preferences])
+```
+
+## Clustering - Preferences
+
+
 ### K-means
 
 ```python
-## K Means
-inertia=[]
-k=range(2, 10)
-for i in k:
-        kmeans=KMeans(n_clusters=i, random_state=45).fit(data[preferences])
-        inertia.append(kmeans.inertia_)
-        
-plt.plot(k, inertia, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Inertia')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
+plot_inertia(data[preferences], KMeans, 2, 10)
 ```
 
 ```python
 kmeans=KMeans(n_clusters=3, random_state=45,).fit(data[preferences])
-```
-
-```python
 centroids=pd.DataFrame(kmeans.cluster_centers_, columns=data[preferences].columns)
 ```
 
 ```python
-centroids=np.round(centroids, 4)
-```
-
-```python
-centroids
+np.round(centroids, 4)
 ```
 
 ```python
@@ -349,86 +522,18 @@ get_r2_scores(data[preferences], Kmeans)
 data['Preferences_Kmeans'].value_counts()
 ```
 
-```python
-# Adapted from:
-# https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-range_clusters=[3,6]
-# Storing average silhouette metric
-avg_silhouette = []
-for nclus in range_clusters:
-    # Skip nclus == 1
-    if nclus == 1:
-        continue
-
-    # Create a figure
-    fig = plt.figure(figsize=(13, 7))
- 
-    # Initialize the KMeans object with n_clusters value and a random generator
-    # seed of 10 for reproducibility.
-    kmclust = KMeans(n_clusters=nclus,random_state=45)
-    cluster_labels = kmclust.fit_predict(data[preferences])
- 
-    # The silhouette_score gives the average value for all the samples.
-    # This gives a perspective into the density and separation of the formed clusters
-    silhouette_avg = silhouette_score(data[preferences], cluster_labels)
-    avg_silhouette.append(silhouette_avg)
-    print(f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}")
- 
-    # Compute the silhouette scores for each sample
-    sample_silhouette_values = silhouette_samples(data[preferences], cluster_labels)
- 
-    y_lower = 10
-    for i in range(nclus):
-        # Aggregate the silhouette scores for samples belonging to cluster i, and sort them
-        ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
-        ith_cluster_silhouette_values.sort()
-
-        # Get y_upper to demarcate silhouette y range size
-        size_cluster_i = ith_cluster_silhouette_values.shape[0]
-        y_upper = y_lower + size_cluster_i
-
-        # Filling the silhouette
-        color = cm.nipy_spectral(float(i) / nclus)
-        plt.fill_betweenx(np.arange(y_lower, y_upper),
-                          0, ith_cluster_silhouette_values,
-                          facecolor=color, edgecolor=color, alpha=0.7)
- 
-        # Label the silhouette plots with their cluster numbers at the middle
-        plt.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
- 
-        # Compute the new y_lower for next plot
-        y_lower = y_upper + 10  # 10 for the 0 samples
- 
-    plt.title("The silhouette plot for the various clusters.")
-    plt.xlabel("The silhouette coefficient values")
-    plt.ylabel("Cluster label")
- 
-    # The vertical line for average silhouette score of all the values
-    plt.axvline(x=silhouette_avg, color="red", linestyle="--")
-
-    # The silhouette coefficient can range from -1, 1
-    xmin, xmax = np.round(sample_silhouette_values.min() -0.1, 2), np.round(sample_silhouette_values.max() + 0.1, 2)
-    plt.xlim([xmin, xmax])
-
-    # The (nclus+1)*10 is for inserting blank space between silhouette
-    # plots of individual clusters, to demarcate them clearly.
-    plt.ylim([0, len(data[preferences]) + (nclus + 1) * 10])
- 
-    plt.yticks([])  # Clear the yaxis labels / ticks
-    plt.xticks(np.arange(xmin, xmax, 0.1))
-```
-
 # K-Means Followed by Hierarchical Clustering
 
 
 ### K-Means
 
 ```python
-k = 500
-```
-
-```python
-k_means_preferences = KMeans(random_state=10, n_clusters = k, init = 'k-means++', n_init = 10, max_iter = 500).fit(data[preferences])
+k_means_preferences = KMeans(random_state=10, 
+                             n_clusters = 500,
+                             init = 'k-means++',
+                             n_init = 10,
+                             max_iter = 500)
+k_means_preferences.fit(data[preferences])
 ```
 
 ```python
@@ -450,78 +555,14 @@ centroids_preferences
 clusters_preferences
 ```
 
-```python
-visualize_clusterslize_clusters(centroids_preferences)
-```
-
 ### Hierarchical Clustering
 
 ```python
-def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
-    """This function computes the R2 for a set of cluster solutions given by the application of a hierarchical method.
-    The R2 is a measure of the homogenity of a cluster solution. It is based on SSt = SSw + SSb and R2 = SSb/SSt. 
-    
-    Parameters:
-    df (DataFrame): Dataset to apply clustering
-    link_method (str): either "ward", "complete", "average", "single"
-    max_nclus (int): maximum number of clusters to compare the methods
-    min_nclus (int): minimum number of clusters to compare the methods. Defaults to 1.
-    dist (str): distance to use to compute the clustering solution. Must be a valid distance. Defaults to "euclidean".
-    
-    Returns:
-    ndarray: R2 values for the range of cluster solutions
-    """
-    def get_ss(df):
-        ss = np.sum(df.var() * (df.count() - 1))
-        return ss  # return sum of sum of squares of each df variable
-    
-    sst = get_ss(df)  # get total sum of squares
-    
-    r2 = []  # where we will store the R2 metrics for each cluster solution
-    
-    for i in range(min_nclus, max_nclus+1):  # iterate over desired ncluster range
-        cluster = AgglomerativeClustering(n_clusters=i, affinity=dist, linkage=link_method)
-        hclabels = cluster.fit_predict(df) #get cluster labels
-        df_concat = pd.concat((df, pd.Series(hclabels, name='labels')), axis=1)  # concat df with labels
-        ssw_labels = df_concat.groupby(by='labels').apply(get_ss)  # compute ssw for each cluster labels
-        ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-        r2.append(ssb / sst)  # save the R2 of the given cluster solution
-        
-    return np.array(r2)
+generate_hc_methods_plot(centroids_preferences)
 ```
 
 ```python
-# Prepare input
-hc_methods = ["ward", "complete", "average", "single"]
-# Call function defined above to obtain the R2 statistic for each hc_method
-max_nclus = 10
-r2_hc_methods = np.vstack([get_r2_hc(df=centroids_preferences.copy(), link_method = link, max_nclus=max_nclus) for link in hc_methods]).T
-r2_hc_methods = pd.DataFrame(r2_hc_methods, index=range(1, max_nclus + 1), columns=hc_methods)
-
-sns.set()
-# Plot data
-fig = plt.figure(figsize=(11,5))
-sns.lineplot(data=r2_hc_methods, linewidth=2.5, markers=["o"]*4)
-
-# Finalize the plot
-fig.suptitle("R2 plot for various hierarchical methods", fontsize=21)
-plt.gca().invert_xaxis()  # invert x axis
-plt.legend(title="HC methods", title_fontsize=11)
-plt.xticks(range(1, max_nclus + 1))
-plt.xlabel("Number of clusters", fontsize=13)
-plt.ylabel("R2 metric", fontsize=13)
-
-plt.show()
-```
-
-```python
-link =linkage(centroids_preferences, method = 'ward')
-```
-
-```python
-dendo = dendrogram(link, color_threshold=7.1)
-plt.axhline(7.1, linestyle='--')
-plt.show()
+generate_dendrogram(centroids_preferences, 'ward')
 ```
 
 ```python
@@ -581,28 +622,35 @@ sm.train(n_job=4, verbose='info', train_rough_len=100, train_finetune_len=100)
 ```
 
 ```python
-sm.get_node_vectors()
-
-# Component planes on the 50x50 grid
-sns.set()
-view2D = View2D(12,12,"", text_size=10)
-view2D.show(sm, col_sz=3, what='codebook')
-plt.subplots_adjust(top=0.90)
-plt.suptitle("Component Planes", fontsize=20)
-plt.show()
+def generate_component_planes(sm):
+    sm.get_node_vectors()
+    # Component planes on the SOM grid
+    view2D = View2D(12,12,"", text_size=10)
+    view2D.show(sm, col_sz=3, what='codebook')
+    plt.subplots_adjust(top=0.90)
+    plt.suptitle("Component Planes", fontsize=20)
+    plt.show()
 ```
 
 ```python
-# U-matrix of the 50x50 grid
-u = sompy.umatrix.UMatrixView(12, 12, 'umatrix', show_axis=True, text_size=8, show_text=True)
+generate_component_planes(sm)
+```
 
-UMAT = u.show(
-    sm, 
-    distance2=1, 
-    row_normalized=False, 
-    show_data=False, 
-    contooor=True # Visualize isomorphic curves
-)
+```python
+def generate_u_matrix(sm):
+    u = sompy.umatrix.UMatrixView(12, 12, 'umatrix', show_axis=True, text_size=8, show_text=True)
+
+    UMAT = u.show(
+        sm, 
+        distance2=1, 
+        row_normalized=False, 
+        show_data=False, 
+        contooor=True # Visualize isomorphic curves
+    )
+```
+
+```python
+generate_u_matrix(sm)
 ```
 
 ```python
@@ -618,18 +666,12 @@ som_clusters
 # K-Means Clustering on top of SOM
 
 ```python
-# Perform K-Means clustering on top of the 2500 untis (sm.get_node_vectors() output)
 kmeans = KMeans(n_clusters=6, init='k-means++', n_init=20, random_state=42)
 nodeclus_labels = sm.cluster(kmeans)
+```
 
- 
-
-hits  = HitMapView(12, 12,"Clustering", text_size=10)
-hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
-
- 
-
-plt.show()
+```python
+generate_hit_map(sm)
 ```
 
 ```python
@@ -662,15 +704,7 @@ cent_k_som.drop(columns='BMU').groupby('label').mean()
 ```
 
 ```python
-def get_ss(df):
-    ss = np.sum(df.var() * (df.count() - 1))
-    return ss  # return sum of sum of squares of each df variable
-
-sst = get_ss(cent_k_som[preferences])  # get total sum of squares
-ssw_labels = cent_k_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score_k_som = ssb / sst
-r2_score_k_som
+r2_calc_label(cent_k_som, preferences)
 ```
 
 # Hierarchical Clustering on top of SOM
@@ -678,15 +712,10 @@ r2_score_k_som
 ```python
 hierclust = AgglomerativeClustering(n_clusters=6, linkage='ward')
 nodeclus_labels = sm.cluster(hierclust)
+```
 
- 
-
-hits  = HitMapView(12, 12,"Clustering",text_size=10)
-hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
-
- 
-
-plt.show()
+```python
+generate_hit_map(sm)
 ```
 
 ```python
@@ -719,29 +748,13 @@ cent_hc_som.drop(columns='BMU').groupby('label').mean()
 ```
 
 ```python
-sst = get_ss(cent_hc_som[preferences])  # get total sum of squares
-ssw_labels = cent_hc_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score_hc = ssb / sst
-r2_score_hc
+r2_calc_label(cent_hc_som, preferences)
 ```
 
 # KMODES
 
 ```python
-## K Modes
-costs=[]
-k=range(2, 7)
-for i in k:
-        kM = KModes(n_clusters=i, init='Huang')
-        cls = kM.fit_predict(data[preferences])
-        costs.append(kM.cost_)
-        
-plt.plot(k, costs, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Cost')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
+plot_inertia(data[preferences], KModes, 2, 7)
 ```
 
 ```python
@@ -767,23 +780,7 @@ data['Preferences_KModes'].value_counts()
 ```
 
 ```python
-r2(data[preferences],data['Preferences_KModes'])
-```
-
-# DBSCAN
-
-```python
-neigh = NearestNeighbors(n_neighbors=50, metric='hamming')
-neigh.fit(data[preferences])
-distances, _ = neigh.kneighbors(data[preferences])
-distances = np.sort(distances[:, -1])
-plt.plot(distances)
-plt.show()
-```
-
-```python
-dbscan=DBSCAN(eps=0.07, min_samples=50, metric='hamming', n_jobs=4)
-clusters=dbscan.fit(data[preferences])
+r2_calc_label(data, preferences, label='Preferences_KModes')
 ```
 
 # K Means on top of Principal Components Analysis
