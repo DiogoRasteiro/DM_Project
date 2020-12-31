@@ -376,6 +376,10 @@ data1=pd.DataFrame(KNN, index=data.index, columns=data.columns)
 ```
 
 ```python
+data = data1.copy()
+```
+
+```python
 data1['URB_LVL_S'].value_counts()
 ```
 
@@ -404,19 +408,7 @@ data.drop(columns=['SOCIO_COH','URB_COH'], inplace=True)
 ```
 
 ```python
-data.drop(columns=['SOCIO_ECO_1','SOCIO_ECO_2','SOCIO_ECO_3','SOCIO_ECO_4'])
-```
-
-```python
-data1_backup=data1.copy()
-```
-
-```python
-data_backup=data.copy()
-```
-
-```python
-data=data1.copy()
+data.drop(columns=['SOCIO_ECO_1','SOCIO_ECO_2','SOCIO_ECO_3','SOCIO_ECO_4'], inplace = True)
 ```
 
 # Correlation Analysis
@@ -441,9 +433,6 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 ```python
 data.to_csv('data/donorsPreprocessed.csv', index=True)
 ```
-
-
-
-
-
-
+```python
+data.isna().sum()
+```

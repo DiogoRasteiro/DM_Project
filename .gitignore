@@ -7,3 +7,4 @@ data/donors.csv
 *.ipynb
 .ipynb_checkpoints/*
 backup/*
+DonorSegmentation-CLUSTERSALBERNAS.md
