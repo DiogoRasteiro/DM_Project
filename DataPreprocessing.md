@@ -217,6 +217,26 @@ Finally, with the largest of missing values out of the way, we can deal with the
 data.isna().sum().sort_values(ascending=False).to_frame()
 ```
 
+```python
+missing=pd.DataFrame(data.isna().sum().sort_values(ascending=False))
+col_miss=missing[missing[0]>=1].index
+missing=missing/95412
+```
+
+```python
+fig, ax = plt.subplots(figsize=(30, 10))
+missing.loc[col_miss].plot(kind='bar', ax=ax)
+plt.axhline(y=0.1, color='red', linestyle='--')
+yticks=plt.yticks(ticks=[1.0,0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1])
+```
+
+```python
+fig, ax = plt.subplots(figsize=(5, 5))
+missing[(missing[0]<=0.1) & (missing[0]>0)].plot(kind='bar', ax=ax)
+plt.axhline(y=0.1, color='red', linestyle='--')
+yticks=plt.yticks(ticks=[1.0,0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1])
+```
+
 For 'FISTDATE', since there are only 2 rows with missing values, we decided to exclude them since they represent a very small loss in quantity.
 
 ```python
@@ -441,6 +461,10 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 ```python
 data.to_csv('data/donorsPreprocessed.csv', index=True)
 ```
+
+
+
+
 
 
 
