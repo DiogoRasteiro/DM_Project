@@ -24,7 +24,7 @@ from scipy import stats
 from sklearn.cluster import KMeans,DBSCAN
 from sklearn.metrics import silhouette_samples, silhouette_score
 from sklearn.neighbors import KNeighborsRegressor,NearestNeighbors
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler, PowerTransformer
 from sklearn.impute import KNNImputer
 from pandas_profiling import ProfileReport
 from datetime import datetime
@@ -37,6 +37,7 @@ from sklearn.decomposition import PCA
 import math
 from sklearn.mixture import GaussianMixture
 from kmodes.kprototypes import KPrototypes
+import umap
 
 
 from matplotlib.patches import Circle, RegularPolygon
@@ -301,56 +302,6 @@ def get_r2_scores(df, clusterer, min_k=2, max_k=10):
     return r2_clust
 ```
 
-### K-means
-
-```python
-## K Means
-inertia=[]
-k=range(2, 10)
-for i in k:
-        kmeans=KMeans(n_clusters=i, random_state=45).fit(data[preferences])
-        inertia.append(kmeans.inertia_)
-        
-plt.plot(k, inertia, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Inertia')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
-```
-
-```python
-kmeans=KMeans(n_clusters=3, random_state=45,).fit(data[preferences])
-```
-
-```python
-centroids=pd.DataFrame(kmeans.cluster_centers_, columns=data[preferences].columns)
-```
-
-```python
-centroids=np.round(centroids, 4)
-```
-
-```python
-centroids
-```
-
-```python
-visualize_clusters(centroids)
-```
-
-```python
-data['Preferences_Kmeans'] = kmeans.labels_
-```
-
-```python
-Kmeans = KMeans(random_state=45)
-get_r2_scores(data[preferences], Kmeans)
-```
-
-```python
-data['Preferences_Kmeans'].value_counts()
-```
-
 ```python
 # Adapted from:
 # https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
@@ -420,44 +371,6 @@ for nclus in range_clusters:
     plt.xticks(np.arange(xmin, xmax, 0.1))
 ```
 
-# K-Means Followed by Hierarchical Clustering
-
-
-### K-Means
-
-```python
-k = 500
-```
-
-```python
-k_means_preferences = KMeans(random_state=10, n_clusters = k, init = 'k-means++', n_init = 10, max_iter = 500).fit(data[preferences])
-```
-
-```python
-centroids_preferences = k_means_preferences.cluster_centers_
-centroids_preferences = pd.DataFrame(centroids_preferences, columns = data[preferences].columns)
-```
-
-```python
-clusters_preferences = pd.DataFrame(k_means_preferences.labels_, columns = ['Centroids'])
-clusters_preferences['ID'] = data[preferences].index
-```
-
-```python
-centroids_preferences=np.round(centroids_preferences, 4)
-centroids_preferences
-```
-
-```python
-clusters_preferences
-```
-
-```python
-visualize_clusterslize_clusters(centroids_preferences)
-```
-
-### Hierarchical Clustering
-
 ```python
 def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
     """This function computes the R2 for a set of cluster solutions given by the application of a hierarchical method.
@@ -490,242 +403,6 @@ def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
         r2.append(ssb / sst)  # save the R2 of the given cluster solution
         
     return np.array(r2)
-```
-
-```python
-# Prepare input
-hc_methods = ["ward", "complete", "average", "single"]
-# Call function defined above to obtain the R2 statistic for each hc_method
-max_nclus = 10
-r2_hc_methods = np.vstack([get_r2_hc(df=centroids_preferences.copy(), link_method = link, max_nclus=max_nclus) for link in hc_methods]).T
-r2_hc_methods = pd.DataFrame(r2_hc_methods, index=range(1, max_nclus + 1), columns=hc_methods)
-
-sns.set()
-# Plot data
-fig = plt.figure(figsize=(11,5))
-sns.lineplot(data=r2_hc_methods, linewidth=2.5, markers=["o"]*4)
-
-# Finalize the plot
-fig.suptitle("R2 plot for various hierarchical methods", fontsize=21)
-plt.gca().invert_xaxis()  # invert x axis
-plt.legend(title="HC methods", title_fontsize=11)
-plt.xticks(range(1, max_nclus + 1))
-plt.xlabel("Number of clusters", fontsize=13)
-plt.ylabel("R2 metric", fontsize=13)
-
-plt.show()
-```
-
-```python
-link =linkage(centroids_preferences, method = 'ward')
-```
-
-```python
-dendo = dendrogram(link, color_threshold=7.1)
-plt.axhline(7.1, linestyle='--')
-plt.show()
-```
-
-```python
-Hierarchical = AgglomerativeClustering(n_clusters = 6, affinity = 'euclidean', linkage = 'average')
-HC = Hierarchical.fit(centroids_preferences)
-labels = pd.DataFrame(HC.labels_).reset_index()
-labels.columns = ['Centroids', 'Cluster']
-```
-
-```python
-count_centroids = labels.groupby(by='Cluster')['Cluster'].count().reset_index(name='N')
-```
-
-```python
-KMeans_HC = clusters_preferences.merge(labels, how = 'inner', on = 'Centroids')
-KMeans_HC = data.merge(KMeans_HC[['ID','Cluster']], how = 'inner', left_on = data.index, right_on = 'ID')
-KMeans_HC.drop(columns = 'ID', inplace = True)
-KMeans_HC.rename(columns = {'Cluster': 'Preferences_K_Hierarchical'}, inplace=True)
-```
-
-```python
-KMeans_HC
-```
-
-```python
-centroids_KMHC = KMeans_HC.groupby('Preferences_K_Hierarchical')[preferences].mean()
-```
-
-```python
-count_KHC = KMeans_HC.Preferences_K_Hierarchical.value_counts()
-count_KHC = KMeans_HC.groupby(by='Preferences_K_Hierarchical')['Preferences_K_Hierarchical'].count().reset_index(name='N')
-```
-
-```python
-count_KHC
-```
-
-```python
-visualize_clusters(centroids_KMHC)
-```
-
-# SOM
-
-```python
-np.random.seed(42)
-
-sm = sompy.SOMFactory().build(
-    data[preferences].values, 
-    mapsize=(20,20),
-    initialization='random', 
-    neighborhood='gaussian',
-    training='batch',
-    lattice='hexa',
-    component_names=preferences
-)
-sm.train(n_job=4, verbose='info', train_rough_len=100, train_finetune_len=100)
-```
-
-```python
-sm.get_node_vectors()
-
-# Component planes on the 50x50 grid
-sns.set()
-view2D = View2D(12,12,"", text_size=10)
-view2D.show(sm, col_sz=3, what='codebook')
-plt.subplots_adjust(top=0.90)
-plt.suptitle("Component Planes", fontsize=20)
-plt.show()
-```
-
-```python
-# U-matrix of the 50x50 grid
-u = sompy.umatrix.UMatrixView(12, 12, 'umatrix', show_axis=True, text_size=8, show_text=True)
-
-UMAT = u.show(
-    sm, 
-    distance2=1, 
-    row_normalized=False, 
-    show_data=False, 
-    contooor=True # Visualize isomorphic curves
-)
-```
-
-```python
-som_clusters = pd.DataFrame(sm._data, columns=preferences).set_index(data.index)
-som_labels = pd.DataFrame(sm._bmu[0], columns=['SOM_Preferences']).set_index(data.index)
-som_clusters = pd.concat([som_clusters, som_labels], axis=1)
-```
-
-```python
-som_clusters
-```
-
-# K-Means Clustering on top of SOM
-
-```python
-# Perform K-Means clustering on top of the 2500 untis (sm.get_node_vectors() output)
-kmeans = KMeans(n_clusters=6, init='k-means++', n_init=20, random_state=42)
-nodeclus_labels = sm.cluster(kmeans)
-
- 
-
-hits  = HitMapView(12, 12,"Clustering", text_size=10)
-hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
-
- 
-
-plt.show()
-```
-
-```python
-# Check the nodes and and respective clusters
-nodes = sm.get_node_vectors()
-
-df_nodes = pd.DataFrame(nodes, columns=preferences)
-df_nodes['label'] = nodeclus_labels
-df_nodes
-```
-
-```python
-# Obtaining SOM's BMUs labels
-bmus_map = sm.find_bmu(data[preferences])[0]  # get bmus for each observation in df
-
-df_bmus = pd.DataFrame(
-    np.concatenate((data[preferences], np.expand_dims(bmus_map,1)), axis=1),
-    index=data.index, columns=np.append(preferences,"BMU")
-)
-df_bmus
-```
-
-```python
-cent_k_som = df_bmus.merge(df_nodes['label'], 'left', left_on="BMU", right_index=True)
-cent_k_som
-```
-
-```python
-cent_k_som.drop(columns='BMU').groupby('label').mean()
-```
-
-```python
-def get_ss(df):
-    ss = np.sum(df.var() * (df.count() - 1))
-    return ss  # return sum of sum of squares of each df variable
-
-sst = get_ss(cent_k_som[preferences])  # get total sum of squares
-ssw_labels = cent_k_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score_k_som = ssb / sst
-r2_score_k_som
-```
-
-# Hierarchical Clustering on top of SOM
-
-```python
-hierclust = AgglomerativeClustering(n_clusters=6, linkage='ward')
-nodeclus_labels = sm.cluster(hierclust)
-
- 
-
-hits  = HitMapView(12, 12,"Clustering",text_size=10)
-hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
-
- 
-
-plt.show()
-```
-
-```python
-# Check the nodes and and respective clusters
-nodes = sm.get_node_vectors()
-
-df_nodes = pd.DataFrame(nodes, columns=preferences)
-df_nodes['label'] = nodeclus_labels
-df_nodes
-```
-
-```python
-# Obtaining SOM's BMUs labels
-bmus_map = sm.find_bmu(data[preferences])[0]  # get bmus for each observation in df
-
-df_bmus = pd.DataFrame(
-    np.concatenate((data[preferences], np.expand_dims(bmus_map,1)), axis=1),
-    index=data.index, columns=np.append(preferences,"BMU")
-)
-df_bmus
-```
-
-```python
-cent_hc_som = df_bmus.merge(df_nodes['label'], 'left', left_on="BMU", right_index=True)
-cent_hc_som
-```
-
-```python
-cent_hc_som.drop(columns='BMU').groupby('label').mean()
-```
-
-```python
-sst = get_ss(cent_hc_som[preferences])  # get total sum of squares
-ssw_labels = cent_hc_som[preferences.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score_hc = ssb / sst
-r2_score_hc
 ```
 
 # KMODES
@@ -772,102 +449,6 @@ data['Preferences_KModes'].value_counts()
 r2(data[preferences],data['Preferences_KModes'])
 ```
 
-# K Means on top of Principal Components Analysis
-
-```python
-data_pca=data[preferences].copy()
-```
-
-```python
-pca=PCA(n_components='mle', random_state=45).fit(data_pca)
-```
-
-```python
-pd.DataFrame(
-    {"Eigenvalue": pca.explained_variance_,
-     "Difference": np.insert(np.diff(pca.explained_variance_), 0, 0),
-     "Proportion": pca.explained_variance_ratio_,
-     "Cumulative": np.cumsum(pca.explained_variance_ratio_)},
-    index=range(1, pca.n_components_ + 1)
-)
-```
-
-```python
-pca=PCA(n_components=9, random_state=45)
-pca_feat = pca.fit_transform(data_pca)
-pca_feat_names = [f"PC{i}" for i in range(pca.n_components_)]
-pca_df = pd.DataFrame(pca_feat, index=data_pca.index, columns=pca_feat_names)  # remember index=df_pca.index
-pca_df
-```
-
-```python
-data_pca = pd.concat([data_pca, pca_df], axis=1)
-data_pca.head()
-```
-
-```python
-def _color_red_or_green(val):
-    if val < -0.45:
-        color = 'background-color: red'
-    elif val > 0.45:
-        color = 'background-color: green'
-    else:
-        color = ''
-    return color
-
-# Interpreting each Principal Component
-loadings = data_pca.corr().loc[preferences, pca_feat_names]
-loadings.style.applymap(_color_red_or_green)
-```
-
-```python
-data_pca.drop(columns=['PC1','PC4', 'PC5','PC6'], inplace=True)
-```
-
-```python
-principal_components=['PC0','PC2','PC3','PC7','PC8']
-```
-
-```python
-inertia=[]
-k=range(2, 10)
-for i in k:
-        kmeans=KMeans(n_clusters=i, random_state=45).fit(data_pca[principal_components])
-        inertia.append(kmeans.inertia_)
-        
-plt.plot(k, inertia, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Inertia')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
-```
-
-```python
-kmeans=KMeans(n_clusters=5, random_state=45).fit(data_pca[principal_components])
-clusters_PCA=pd.DataFrame(kmeans.cluster_centers_, columns=principal_components)
-```
-
-```python
-labels=kmeans.predict(data_pca[principal_components])
-```
-
-```python
-data_pca['PCA_Clusters']=labels
-```
-
-```python
-data_pca.groupby('PCA_Clusters').mean()
-```
-
-```python
-data_pca['PCA_Clusters'].value_counts()
-```
-
-```python
-r2_pca=r2(data_pca,'PCA_Clusters')
-r2_pca
-```
-
 # T-SNE
 
 ```python
@@ -879,14 +460,6 @@ two_dim = TSNE(random_state=42).fit_transform(data[preferences])
 # t-SNE visualization
 pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=data['Preferences_Kmeans'], colormap='tab10', figsize=(15,10))
 plt.show()
-```
-
-```python
-tsne = TSNE(random_state = 5).fit_transform(KMeans_HC[preferences.append('Preferences_K_Hierarchical')])
-```
-
-```python
-pd.DataFrame(tsne).plot.scatter(x = 0, y = 1, c = KMeans_HC['Preferences_K_Hierarchical'], colormap = 'tab10', fisixe = (15,10))
 ```
 
 # Demographics
@@ -1047,32 +620,63 @@ df_outliers = data[filters]
 print('Percentage of data kept after removing outliers:', (np.round(df_outliers.shape[0] / data.shape[0], 4))*100)
 ```
 
+```python
+numerical = df_outliers[demography_kept].loc[:,df_outliers[demography_kept].apply(lambda x: x.max()>1, axis=0)]
+
+for c in numerical.columns:
+pt = PowerTransformer()
+numerical.loc[:, c] = pt.fit_transform(np.array(numerical[c]).reshape(-1, 1))
+
+##preprocessing categorical
+categorical = df_outliers[demography_kept].drop(columns=numerical.columns)
+
+#Percentage of columns which are categorical is used as weight parameter in embeddings later
+categorical_weight = len(categorical.columns) / df_outliers[demography_kept].shape[1]
+
+#Embedding numerical & categorical
+fit1 = umap.UMAP(metric='l2').fit(numerical)
+fit2 = umap.UMAP(metric='dice').fit(categorical)
+
+#Augmenting the numerical embedding with categorical
+intersection = umap.umap_.general_simplicial_set_intersection(fit1.graph_, fit2.graph_, weight=categorical_weight)
+intersection = umap.umap_.reset_local_connectivity(intersection)
+embedding = umap.umap_.simplicial_set_embedding(fit1._raw_data, intersection, fit1.n_components,
+fit1._initial_alpha, fit1._a, fit1._b,
+fit1.repulsion_strength, fit1.negative_sample_rate,
+200, 'random', np.random, fit1.metric,
+fit1._metric_kwds, False)
+
+plt.figure(figsize=(20, 10))
+plt.scatter(*embedding.T, s=2, cmap='Spectral', alpha=1.0)
+plt.show()
+```
+
 ## Data Normalization
 
 ```python
-df_standard = df_outliers.copy()
+df_minmax = df_outliers.copy()
 ```
 
 ```python
-scaler = StandardScaler()
-scaled_feat = scaler.fit_transform(df_outliers[demography_kept])
+scaler = MinMaxScaler()
+scaled_feat = scaler.fit_transform(df_minmax[demography_kept])
 scaled_feat
 ```
 
 ```python
-df_standard[demography_kept] = scaled_feat
-df_standard.head()
+df_minmax[demography_kept] = scaled_feat
+df_minmax.head()
 ```
 
 ```python
-df_standard[demography_kept]
+df_minmax[demography_kept]
 ```
 
 ```python
 # Prepare figure
 fig = plt.figure(figsize=(20, 20))
 # Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
-corr = np.round(df_standard[demography_kept].corr(method="spearman"), decimals=2)
+corr = np.round(df_minmax[demography_kept].corr(method="spearman"), decimals=2)
 # Build annotation matrix (values above |0.5| will appear annotated in the plot)
 mask_annot = np.absolute(corr.values) >= 0.5
 annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
@@ -1085,109 +689,34 @@ fig.suptitle("Correlation Matrix", fontsize=20)
 plt.show()
 ```
 
-## Principal Components Analysis
-
 ```python
-data_pca=df_standard[demography_kept].copy()
+df_minmax[demography_kept]
 ```
 
-```python
-pca=PCA(n_components='mle', random_state=45).fit(data_pca)
-```
+## K-Prototypes
 
 ```python
-pca.explained_variance_ratio_
-```
-
-```python
-pd.DataFrame(
-    {"Eigenvalue": pca.explained_variance_,
-     "Difference": np.insert(np.diff(pca.explained_variance_), 0, 0),
-     "Proportion": pca.explained_variance_ratio_,
-     "Cumulative": np.cumsum(pca.explained_variance_ratio_)},
-    index=range(1, pca.n_components_ + 1)
-)
-```
-
-```python
-pca=PCA(n_components=9, random_state=45)
-pca_feat = pca.fit_transform(data_pca)
-pca_feat_names = [f"PC{i}" for i in range(pca.n_components_)]
-pca_df = pd.DataFrame(pca_feat, index=data_pca.index, columns=pca_feat_names)  # remember index=df_pca.index
-pca_df
-```
-
-```python
-data_pca = pd.concat([data_pca, pca_df], axis=1)
-data_pca.head()
-```
-
-```python
-def _color_red_or_green(val):
-    if val < -0.45:
-        color = 'background-color: red'
-    elif val > 0.45:
-        color = 'background-color: green'
-    else:
-        color = ''
-    return color
-
-# Interpreting each Principal Component
-loadings = data_pca.corr().loc[demography_kept, pca_feat_names]
-loadings.style.applymap(_color_red_or_green)
-```
-
-```python
-demography_kept=df_standard[demography_kept].drop(columns=['URB_LVL_T']).columns
-```
-
-Since we dropped a column, we will normalize our data again
-
-
-## Data Normalization
-
-```python
-df_standard = df_outliers[demography_kept].copy()
-```
-
-```python
-scaler = StandardScaler()
-scaled_feat = scaler.fit_transform(df_outliers[demography_kept])
-scaled_feat
-```
-
-```python
-df_standard[demography_kept] = scaled_feat
-df_standard.head()
-```
-
-```python
-df_standard[demography_kept]
-```
-
-## K-means
-
-```python
-## K Means
-inertia=[]
+categorical_columns = [0, 12, 13, 14, 15]
+costs=[]
 k=range(2, 10)
 for i in k:
-        kmeans=KMeans(n_clusters=i, random_state=45).fit(df_standard[demography_kept])
-        inertia.append(kmeans.inertia_)
+        kproto=KPrototypes(n_clusters=i, random_state=45).fit(df_minmax[demography_kept], categorical=categorical_columns)
+        costs.append(kproto.cost_)
         
-plt.plot(k, inertia, 'bx-')
+plt.plot(k, costs, 'bx-')
 plt.xlabel('k')
-plt.ylabel('Inertia')
+plt.ylabel('Cost')
 plt.title('The Elbow Method showing the optimal k')
 plt.show()
 ```
 
 ```python
-kmeans=KMeans(n_clusters=4, random_state=45,).fit(df_standard[demography_kept])
+kproto = KPrototypes(n_clusters= 15, init='Cao', n_jobs = 4)
+clusters = kproto.fit_predict(df_minmax[demography_kept], categorical=categorical_columns)
 ```
 
 ```python
-centroids=pd.DataFrame(kmeans.cluster_centers_, columns=df_standard[demography_kept].columns)
+centroids=pd.DataFrame(kproto.cluster_centers_, columns=df_minmax[demography_kept].columns)
 ```
 
 ```python
@@ -1203,16 +732,16 @@ df_outliers[demography_kept].describe(include="all").T
 ```
 
 ```python
-df_outliers['Demography_Kmeans'] = kmeans.labels_
+df_outliers['demography_KPrototypes'] = kproto.labels_
 ```
 
 ```python
-Kmeans = KMeans(random_state=45)
-get_r2_scores(df_standard[demography_kept], Kmeans)
+K_Prototypes = KPrototypes(random_state=45)
+get_r2_scores(df_minmax[demography_kept], K_Prototypes)
 ```
 
 ```python
-df_outliers['Demography_Kmeans'].value_counts()
+df_outliers['demography_KPrototypes'].value_counts()
 ```
 
 ```python
@@ -1232,16 +761,16 @@ for nclus in range_clusters:
     # Initialize the KMeans object with n_clusters value and a random generator
     # seed of 10 for reproducibility.
     kmclust = KMeans(n_clusters=nclus,random_state=45)
-    cluster_labels = kmclust.fit_predict(df_standard[demography_kept])
+    cluster_labels = kmclust.fit_predict(df_minmax[demography_kept])
  
     # The silhouette_score gives the average value for all the samples.
     # This gives a perspective into the density and separation of the formed clusters
-    silhouette_avg = silhouette_score(df_standard[demography_kept], cluster_labels)
+    silhouette_avg = silhouette_score(df_minmax[demography_kept], cluster_labels)
     avg_silhouette.append(silhouette_avg)
     print(f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}")
  
     # Compute the silhouette scores for each sample
-    sample_silhouette_values = silhouette_samples(df_standard[demography_kept], cluster_labels)
+    sample_silhouette_values = silhouette_samples(df_minmax[demography_kept], cluster_labels)
  
     y_lower = 10
     for i in range(nclus):
@@ -1278,526 +807,22 @@ for nclus in range_clusters:
 
     # The (nclus+1)*10 is for inserting blank space between silhouette
     # plots of individual clusters, to demarcate them clearly.
-    plt.ylim([0, len(data[demography_kept]) + (nclus + 1) * 10])
+    plt.ylim([0, len(df_minmax[demography_kept]) + (nclus + 1) * 10])
  
     plt.yticks([])  # Clear the yaxis labels / ticks
     plt.xticks(np.arange(xmin, xmax, 0.1))
-```
-
-### K-Means
-
-```python
-k = 500
-```
-
-```python
-k_means_demography = KMeans(random_state=10, n_clusters = k, init = 'k-means++', n_init = 10, max_iter = 500).fit(df_standard[demography_kept])
-```
-
-```python
-centroids_demography = k_means_demography.cluster_centers_
-centroids_demography = pd.DataFrame(centroids_demography, columns = df_standard[demography_kept].columns)
-```
-
-```python
-clusters_demography = pd.DataFrame(k_means_demography.labels_, columns = ['Centroids'])
-clusters_demography['ID'] = df_standard[demography_kept].index
-```
-
-```python
-centroids_demography=np.round(centroids_demography, 4)
-```
-
-```python
-pd.DataFrame(scaler.inverse_transform(centroids_demography), columns = demography_kept)
-```
-
-```python
-clusters_demography
-```
-
-### Hierarchical Clustering
-
-```python
-def get_r2_hc(df, link_method, max_nclus, min_nclus=1, dist="euclidean"):
-    """This function computes the R2 for a set of cluster solutions given by the application of a hierarchical method.
-    The R2 is a measure of the homogenity of a cluster solution. It is based on SSt = SSw + SSb and R2 = SSb/SSt. 
-    
-    Parameters:
-    df (DataFrame): Dataset to apply clustering
-    link_method (str): either "ward", "complete", "average", "single"
-    max_nclus (int): maximum number of clusters to compare the methods
-    min_nclus (int): minimum number of clusters to compare the methods. Defaults to 1.
-    dist (str): distance to use to compute the clustering solution. Must be a valid distance. Defaults to "euclidean".
-    
-    Returns:
-    ndarray: R2 values for the range of cluster solutions
-    """
-    def get_ss(df):
-        ss = np.sum(df.var() * (df.count() - 1))
-        return ss  # return sum of sum of squares of each df variable
-    
-    sst = get_ss(df)  # get total sum of squares
-    
-    r2 = []  # where we will store the R2 metrics for each cluster solution
-    
-    for i in range(min_nclus, max_nclus+1):  # iterate over desired ncluster range
-        cluster = AgglomerativeClustering(n_clusters=i, affinity=dist, linkage=link_method)
-        hclabels = cluster.fit_predict(df) #get cluster labels
-        df_concat = pd.concat((df, pd.Series(hclabels, name='labels')), axis=1)  # concat df with labels
-        ssw_labels = df_concat.groupby(by='labels').apply(get_ss)  # compute ssw for each cluster labels
-        ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-        r2.append(ssb / sst)  # save the R2 of the given cluster solution
-        
-    return np.array(r2)
-```
-
-```python
-# Prepare input
-hc_methods = ["ward", "complete", "average", "single"]
-# Call function defined above to obtain the R2 statistic for each hc_method
-max_nclus = 10
-r2_hc_methods = np.vstack([get_r2_hc(df=centroids_demography.copy(), link_method = link, max_nclus=max_nclus) for link in hc_methods]).T
-r2_hc_methods = pd.DataFrame(r2_hc_methods, index=range(1, max_nclus + 1), columns=hc_methods)
-
-sns.set()
-# Plot data
-fig = plt.figure(figsize=(11,5))
-sns.lineplot(data=r2_hc_methods, linewidth=2.5, markers=["o"]*4)
-
-# Finalize the plot
-fig.suptitle("R2 plot for various hierarchical methods", fontsize=21)
-plt.gca().invert_xaxis()  # invert x axis
-plt.legend(title="HC methods", title_fontsize=11)
-plt.xticks(range(1, max_nclus + 1))
-plt.xlabel("Number of clusters", fontsize=13)
-plt.ylabel("R2 metric", fontsize=13)
-
-plt.show()
-```
-
-```python
-link =linkage(centroids_demography, method = 'ward')
-```
-
-```python
-dendo = dendrogram(link, color_threshold=7.1)
-plt.axhline(7.1, linestyle='--')
-plt.show()
-```
-
-```python
-Hierarchical = AgglomerativeClustering(n_clusters = 4, affinity = 'euclidean', linkage = 'average')
-HC = Hierarchical.fit(centroids_demography)
-labels = pd.DataFrame(HC.labels_).reset_index()
-labels.columns = ['Centroids', 'Cluster']
-```
-
-```python
-count_centroids = labels.groupby(by='Cluster')['Cluster'].count().reset_index(name='N')
-```
-
-```python
-KMeans_HC = clusters_demography.merge(labels, how = 'inner', on = 'Centroids')
-KMeans_HC = df_outliers.merge(KMeans_HC[['ID','Cluster']], how = 'inner', left_on = df_outliers.index, right_on = 'ID')
-KMeans_HC.drop(columns = 'ID', inplace = True)
-KMeans_HC.rename(columns = {'Cluster': 'demography_K_Hierarchical'}, inplace=True)
-```
-
-```python
-KMeans_HC
-```
-
-```python
-centroids_KMHC = KMeans_HC.groupby('demography_K_Hierarchical')[demography_kept].mean()
-```
-
-```python
-centroids_KMHC
-```
-
-```python
-count_KHC = KMeans_HC.demography_K_Hierarchical.value_counts()
-count_KHC = KMeans_HC.groupby(by='demography_K_Hierarchical')['demography_K_Hierarchical'].count().reset_index(name='N')
-```
-
-```python
-count_KHC
-```
-
-# SOM
-
-```python
-np.random.seed(42)
-
-sm = sompy.SOMFactory().build(
-    df_standard[demography_kept].values, 
-    mapsize=(20,20),
-    initialization='random', 
-    neighborhood='gaussian',
-    training='batch',
-    lattice='hexa',
-    component_names=demography_kept
-)
-sm.train(n_job=4, verbose='info', train_rough_len=100, train_finetune_len=100)
-```
-
-```python
-sm.get_node_vectors()
-
-# Component planes on the 50x50 grid
-sns.set()
-view2D = View2D(12,12,"", text_size=10)
-view2D.show(sm, col_sz=3, what='codebook')
-plt.subplots_adjust(top=0.90)
-plt.suptitle("Component Planes", fontsize=20)
-plt.show()
-```
-
-```python
-# U-matrix of the 50x50 grid
-u = sompy.umatrix.UMatrixView(12, 12, 'umatrix', show_axis=True, text_size=8, show_text=True)
-
-UMAT = u.show(
-    sm, 
-    distance2=1, 
-    row_normalized=False, 
-    show_data=False, 
-    contooor=True # Visualize isomorphic curves
-)
-```
-
-```python
-som_clusters = pd.DataFrame(sm._data, columns=demography_kept).set_index(df_outliers.index)
-som_labels = pd.DataFrame(sm._bmu[0], columns=['SOM_demography']).set_index(df_outliers.index)
-som_clusters = pd.concat([som_clusters, som_labels], axis=1)
-```
-
-```python
-som_clusters
-```
-
-# K-Means Clustering on top of SOM
-
-```python
-## K Means
-inertia=[]
-k=range(2, 10)
-for i in k:
-        kmeans=KMeans(n_clusters=i, random_state=45).fit(som_clusters)
-        inertia.append(kmeans.inertia_)
-        
-plt.plot(k, inertia, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Inertia')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
-```
-
-```python
-# Perform K-Means clustering on top of the 2500 untis (sm.get_node_vectors() output)
-kmeans = KMeans(n_clusters=4, init='k-means++', n_init=20, random_state=42)
-nodeclus_labels = sm.cluster(kmeans)
-
- 
-
-hits  = HitMapView(12, 12,"Clustering", text_size=10)
-hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
-
- 
-
-plt.show()
-```
-
-```python
-# Check the nodes and and respective clusters
-nodes = sm.get_node_vectors()
-
-df_nodes = pd.DataFrame(nodes, columns=demography_kept)
-df_nodes['label'] = nodeclus_labels
-df_nodes
-```
-
-```python
-# Obtaining SOM's BMUs labels
-bmus_map = sm.find_bmu(df_standard[demography_kept])[0]  # get bmus for each observation in df
-
-df_bmus = pd.DataFrame(
-    np.concatenate((df_standard[demography_kept], np.expand_dims(bmus_map,1)), axis=1),
-    index=df_outliers.index, columns=np.append(demography_kept,"BMU")
-)
-df_bmus
-```
-
-```python
-cent_k_som = df_bmus.merge(df_nodes['label'], 'left', left_on="BMU", right_index=True)
-cent_k_som
-```
-
-```python
-centroids_k_som = cent_k_som.drop(columns='BMU').groupby('label').mean()
-```
-
-```python
-pd.DataFrame(scaler.inverse_transform(centroids_k_som), columns = demography_kept)
-```
-
-```python
-def get_ss(df):
-    ss = np.sum(df.var() * (df.count() - 1))
-    return ss  # return sum of sum of squares of each df variable
-
-sst = get_ss(cent_k_som[demography_kept])  # get total sum of squares
-ssw_labels = cent_k_som[demography_kept.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score_k_som = ssb / sst
-r2_score_k_som
-```
-
-# Hierarchical Clustering on top of SOM
-
-```python
-# Check the nodes and and respective clusters
-nodes = sm.get_node_vectors()
-
-df_nodes = pd.DataFrame(nodes, columns=demography_kept)
-df_nodes['label'] = nodeclus_labels
-df_nodes
-```
-
-```python
-# Prepare input
-hc_methods = ["ward", "complete", "average", "single"]
-# Call function defined above to obtain the R2 statistic for each hc_method
-max_nclus = 10
-r2_hc_methods = np.vstack([get_r2_hc(df=df_nodes.copy(), link_method = link, max_nclus=max_nclus) for link in hc_methods]).T
-r2_hc_methods = pd.DataFrame(r2_hc_methods, index=range(1, max_nclus + 1), columns=hc_methods)
-
-sns.set()
-# Plot data
-fig = plt.figure(figsize=(11,5))
-sns.lineplot(data=r2_hc_methods, linewidth=2.5, markers=["o"]*4)
-
-# Finalize the plot
-fig.suptitle("R2 plot for various hierarchical methods", fontsize=21)
-plt.gca().invert_xaxis()  # invert x axis
-plt.legend(title="HC methods", title_fontsize=11)
-plt.xticks(range(1, max_nclus + 1))
-plt.xlabel("Number of clusters", fontsize=13)
-plt.ylabel("R2 metric", fontsize=13)
-
-plt.show()
-```
-
-```python
-link =linkage(centroids_demography, method = 'ward')
-```
-
-```python
-dendo = dendrogram(link, color_threshold=7.1)
-plt.axhline(7.1, linestyle='--')
-plt.show()
-```
-
-```python
-hierclust = AgglomerativeClustering(n_clusters=4, linkage='ward')
-nodeclus_labels = sm.cluster(hierclust)
-
- 
-
-hits  = HitMapView(12, 12,"Clustering",text_size=10)
-hits.show(sm, anotate=True, onlyzeros=False, labelsize=7, cmap="Pastel1")
-
- 
-
-plt.show()
-```
-
-```python
-# Obtaining SOM's BMUs labels
-bmus_map = sm.find_bmu(df_standard[demography_kept])[0]  # get bmus for each observation in df
-
-df_bmus = pd.DataFrame(
-    np.concatenate((df_standard[demography_kept], np.expand_dims(bmus_map,1)), axis=1),
-    index=df_standard.index, columns=np.append(demography_kept,"BMU")
-)
-df_bmus
-```
-
-```python
-cent_hc_som = df_bmus.merge(df_nodes['label'], 'left', left_on="BMU", right_index=True)
-cent_hc_som
-```
-
-```python
-cent_hc_som.drop(columns='BMU').groupby('label').mean()
-```
-
-```python
-sst = get_ss(cent_hc_som[demography_kept])  # get total sum of squares
-ssw_labels = cent_hc_som[demography_kept.to_list() + ["label"]].groupby(by='label').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score_hc = ssb / sst
-r2_score_hc
-```
-
-# K Means on top of Principal Components Analysis
-
-```python
-data_pca=df_standard[demography_kept].copy()
-```
-
-```python
-pca=PCA(n_components='mle', random_state=45).fit(data_pca)
-```
-
-```python
-pd.DataFrame(
-    {"Eigenvalue": pca.explained_variance_,
-     "Difference": np.insert(np.diff(pca.explained_variance_), 0, 0),
-     "Proportion": pca.explained_variance_ratio_,
-     "Cumulative": np.cumsum(pca.explained_variance_ratio_)},
-    index=range(1, pca.n_components_ + 1)
-)
-```
-
-```python
-pca=PCA(n_components=9, random_state=45)
-pca_feat = pca.fit_transform(data_pca)
-pca_feat_names = [f"PC{i}" for i in range(pca.n_components_)]
-pca_df = pd.DataFrame(pca_feat, index=data_pca.index, columns=pca_feat_names)  # remember index=df_pca.index
-pca_df
-```
-
-```python
-data_pca = pd.concat([data_pca, pca_df], axis=1)
-data_pca.head()
-```
-
-```python
-def _color_red_or_green(val):
-    if val < -0.45:
-        color = 'background-color: red'
-    elif val > 0.45:
-        color = 'background-color: green'
-    else:
-        color = ''
-    return color
-
-# Interpreting each Principal Component
-loadings = data_pca.corr().loc[demography_kept, pca_feat_names]
-loadings.style.applymap(_color_red_or_green)
-```
-
-```python
-principal_components = ['PC0', 'PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'PC8']
-```
-
-```python
-inertia=[]
-k=range(2, 10)
-for i in k:
-        kmeans=KMeans(n_clusters=i, random_state=45).fit(data_pca[principal_components])
-        inertia.append(kmeans.inertia_)
-        
-plt.plot(k, inertia, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Inertia')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
-```
-
-```python
-kmeans=KMeans(n_clusters=6, random_state=45).fit(data_pca[principal_components])
-clusters_PCA=pd.DataFrame(kmeans.cluster_centers_, columns=principal_components)
-```
-
-```python
-labels=kmeans.predict(data_pca[principal_components])
-```
-
-```python
-data_pca['PCA_Clusters']=labels
-```
-
-```python
-data_pca.groupby('PCA_Clusters').mean()
-```
-
-```python
-data_pca['PCA_Clusters'].value_counts()
-```
-
-```python
-r2_pca=r2(data_pca,'PCA_Clusters')
-r2_pca
-```
-
-# Gaussian Mixture
-
-```python
-# Selecting number of components based on AIC and BIC
-n_components = np.arange(1, 16)
-models = [GaussianMixture(n, covariance_type='full', n_init=10, random_state=1).fit(df_standard[demography_kept])
-          for n in n_components]
-
-bic_values = [m.bic(df_standard[demography_kept]) for m in models]
-aic_values = [m.aic(df_standard[demography_kept]) for m in models]
-plt.plot(n_components, bic_values, label='BIC')
-plt.plot(n_components, aic_values, label='AIC')
-plt.legend(loc='best')
-plt.xlabel('n_components')
-plt.xticks(n_components)
-plt.show()
-```
-
-```python
-# Performing GMM clustering
-gmm = GaussianMixture(n_components=5, covariance_type='full', n_init=10, init_params='kmeans', random_state=1)
-gmm_labels = gmm.fit_predict(df_standard[demography_kept])
-labels_proba = gmm.predict_proba(df_standard[demography_kept])
-```
-
-```python
-# The estimated component weights
-gmm.weights_
-```
-
-```python
-# The estimated mean vectors of the Components
-gmm.means_
-```
-
-```python
-# The estimated covariance matrices of the Components
-gmm.covariances_.shape
-```
-
-```python
-# Concatenating the labels to df
-df_concat = pd.concat([df_standard[demography_kept], pd.Series(gmm_labels, index=df_outliers.index, name="gmm_labels")], axis=1)
-df_concat.head()
-```
-
-```python
-# Computing the R^2 of the cluster solution
-sst = get_ss(df_standard[demography_kept])  # get total sum of squares
-ssw_labels = df_concat.groupby(by='gmm_labels').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score = ssb / sst
-print("Cluster solution with R^2 of %0.4f" % r2)
 ```
 
 # T-SNE
 
 ```python
 # This is step can be quite time consuming
-two_dim = TSNE(random_state=42).fit_transform(df_standard[demography_kept])
+two_dim = TSNE(random_state=42).fit_transform(df_minmax[demography_kept])
 ```
 
 ```python
 # t-SNE visualization
-pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=df_outliers['Demography_Kmeans'], colormap='tab10', figsize=(15,10))
+pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=df_minmax['Demography_Kmeans'], colormap='tab10', figsize=(15,10))
 plt.show()
 ```
 
@@ -1831,7 +856,7 @@ plt.show()
 ```
 
 ```python
-value_kept=['HIT', 'PEPSTRFL', 'CARDPROM', 'CARDPM12', 'NUMPRM12', 'RAMNTALL', 'NGIFTALL', 'MINRAMNT', 
+value_kept=['HIT', 'CARDPROM', 'CARDPM12', 'NUMPRM12', 'RAMNTALL', 'NGIFTALL', 'MINRAMNT', 
        'MAXRAMNT', 'LASTGIFT', 'AVGGIFT', 'RFA_2F', 'NREPLIES', 'AVG_AMNT', 'LASTDATE_DAYS', 'MAXRDATE_DAYS', 'DAYS_PER_GIFT']
 ```
 
