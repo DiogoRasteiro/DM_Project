@@ -491,6 +491,8 @@ plt.suptitle(title)
 plt.show()
 ```
 
+We started by doing some feature selection on the binary variables and then we made also some feature engineering. The 'PERCGOV' and 'PERCMINORITY' variables were created here in order to reduce the input space.
+
 ```python
 data['PERCGOV']=data['LOCALGOV']+data['STATEGOV']+data['FEDGOV']
 ```
@@ -624,8 +626,8 @@ print('Percentage of data kept after removing outliers:', (np.round(df_outliers.
 numerical = df_outliers[demography_kept].loc[:,df_outliers[demography_kept].apply(lambda x: x.max()>1, axis=0)]
 
 for c in numerical.columns:
-pt = PowerTransformer()
-numerical.loc[:, c] = pt.fit_transform(np.array(numerical[c]).reshape(-1, 1))
+    pt = PowerTransformer()
+    numerical.loc[:, c] = pt.fit_transform(np.array(numerical[c]).reshape(-1, 1))
 
 ##preprocessing categorical
 categorical = df_outliers[demography_kept].drop(columns=numerical.columns)
@@ -673,23 +675,6 @@ df_minmax[demography_kept]
 ```
 
 ```python
-# Prepare figure
-fig = plt.figure(figsize=(20, 20))
-# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
-corr = np.round(df_minmax[demography_kept].corr(method="spearman"), decimals=2)
-# Build annotation matrix (values above |0.5| will appear annotated in the plot)
-mask_annot = np.absolute(corr.values) >= 0.5
-annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
-# Plot heatmap of the correlation matrix
-sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
-            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
-# Layout
-fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
-plt.show()
-```
-
-```python
 df_minmax[demography_kept]
 ```
 
@@ -711,33 +696,66 @@ plt.show()
 ```
 
 ```python
-kproto = KPrototypes(n_clusters= 15, init='Cao', n_jobs = 4)
+kproto = KPrototypes(n_clusters= 4, init='Cao', n_jobs = 4)
 clusters = kproto.fit_predict(df_minmax[demography_kept], categorical=categorical_columns)
 ```
 
 ```python
-centroids=pd.DataFrame(kproto.cluster_centers_, columns=df_minmax[demography_kept].columns)
+df_minmax['demography_KPrototypes'] = clusters
 ```
 
 ```python
-centroids=np.round(centroids, 4)
+def cluster_profiles(df, columns, label_columns, figsize, compar_titles=None):
+    """
+    Pass df with labels columns of one or multiple clustering labels. 
+    Then specify this label columns to perform the cluster profile according to them.
+    """
+    if compar_titles == None:
+        compar_titles = [""]*len(label_columns)
+
+    sns.set()
+    fig, axes = plt.subplots(nrows=len(label_columns), ncols=2, figsize=figsize, squeeze=False)
+    for ax, cols_to_use, label, titl in zip(axes, columns, label_columns, compar_titles):
+        # Filtering df
+        drop_cols = [i for i in label_columns if i!=label]
+        dfax = df.drop(drop_cols, axis=1)
+        dfax = dfax[cols_to_use]
+        dfax[label] = df[label]
+
+        # Getting the cluster centroids and counts
+        centroids = dfax.groupby(by=label, as_index=False).mean()
+        counts = dfax.groupby(by=label, as_index=False).count().iloc[:,[0,1]]
+        counts.columns = [label, "counts"]
+
+        # Setting Data
+        pd.plotting.parallel_coordinates(centroids, label, color=sns.color_palette(), ax=ax[0],linewidth=10)
+        sns.barplot(x=label, y="counts", data=counts, ax=ax[1])
+ 
+        #Setting Layout
+        handles, _ = ax[0].get_legend_handles_labels()
+        cluster_labels = ["Cluster {}".format(i) for i in range(len(handles))]
+        ax[0].annotate(s=titl, xy=(0.95,1.1), xycoords='axes fraction', fontsize=13, fontweight = 'heavy') 
+        ax[0].legend(handles, cluster_labels) # Adaptable to number of clusters
+        ax[0].axhline(color="black", linestyle="--")
+        ax[0].set_title("Cluster Means - {} Clusters".format(len(handles)), fontsize=13)
+        ax[0].set_xticklabels(ax[0].get_xticklabels(), rotation=-20)
+        ax[1].set_xticklabels(cluster_labels)
+        ax[1].set_xlabel("")
+        ax[1].set_ylabel("Absolute Frequency")
+        ax[1].set_title("Cluster Sizes - {} Clusters".format(len(handles)), fontsize=13)
+
+    plt.subplots_adjust(hspace=0.4, top=0.90)
+    plt.suptitle("Cluster Simple Profilling", fontsize=23)
+    plt.show()
 ```
 
 ```python
-pd.DataFrame(scaler.inverse_transform(centroids), columns = demography_kept)
+plot = ['is_male', 'PERCMINORITY','IC1', 'URB_LVL_S',
+       'URB_LVL_R', 'URB_LVL_C', 'URB_LVL_T']
 ```
 
 ```python
-df_outliers[demography_kept].describe(include="all").T
-```
-
-```python
-df_outliers['demography_KPrototypes'] = kproto.labels_
-```
-
-```python
-K_Prototypes = KPrototypes(random_state=45)
-get_r2_scores(df_minmax[demography_kept], K_Prototypes)
+cluster_profiles(df_minmax, [plot] , ['demography_KPrototypes'], (28, 10))
 ```
 
 ```python
@@ -858,6 +876,14 @@ plt.show()
 ```python
 value_kept=['HIT', 'CARDPROM', 'CARDPM12', 'NUMPRM12', 'RAMNTALL', 'NGIFTALL', 'MINRAMNT', 
        'MAXRAMNT', 'LASTGIFT', 'AVGGIFT', 'RFA_2F', 'NREPLIES', 'AVG_AMNT', 'LASTDATE_DAYS', 'MAXRDATE_DAYS', 'DAYS_PER_GIFT']
+```
+
+```python
+data[value_kept].describe()
+```
+
+```python
+value_kept = data[value_kept].drop(columns = 'LASTDATE_DAYS').columns
 ```
 
 ```python
