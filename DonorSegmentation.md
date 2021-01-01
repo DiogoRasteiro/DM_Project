@@ -481,6 +481,17 @@ def generate_hit_map(sm):
     plt.show()
 ```
 
+```python
+def generate_component_planes(sm):
+    sm.get_node_vectors()
+    # Component planes on the SOM grid
+    view2D = View2D(12,12,"", text_size=10)
+    view2D.show(sm, col_sz=3, what='codebook')
+    plt.subplots_adjust(top=0.90)
+    plt.suptitle("Component Planes", fontsize=20)
+    plt.show()
+```
+
 # Feature Selection
 
 
@@ -638,17 +649,6 @@ sm.train(n_job=4, verbose='info', train_rough_len=100, train_finetune_len=100)
 ```
 
 ```python
-def generate_component_planes(sm):
-    sm.get_node_vectors()
-    # Component planes on the SOM grid
-    view2D = View2D(12,12,"", text_size=10)
-    view2D.show(sm, col_sz=3, what='codebook')
-    plt.subplots_adjust(top=0.90)
-    plt.suptitle("Component Planes", fontsize=20)
-    plt.show()
-```
-
-```python
 generate_component_planes(sm)
 ```
 
@@ -708,6 +708,10 @@ df_bmus = pd.DataFrame(
     index=data.index, columns=np.append(preferences,"BMU")
 )
 df_bmus
+```
+
+```python
+
 ```
 
 ```python
