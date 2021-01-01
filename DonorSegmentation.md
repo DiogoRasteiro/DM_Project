@@ -352,6 +352,20 @@ def generate_count_plots(df, title='Count Plots'):
 ```
 
 ```python
+def generate_box_plots(df, title='Box Plots'):
+    # Prepare figure. Create individual axes where each box plot will be placed
+    fig, axes = plt.subplots(2, math.ceil(len(df.columns) / 2), figsize=(20, 11))
+    
+    # Iterate across axes objects and associate each box plot (hint: use the ax argument):
+    for ax, feat in zip(axes.flatten(), df.columns): # Notice the zip() function and flatten() method
+        sns.boxplot(df[feat], ax=ax)
+        
+    # Add a centered title to the figure:
+    plt.suptitle(title)
+    plt.show()
+```
+
+```python
 def generate_silhouette_plots(df, clusterer, range_clusters):
     # Adapted from:
     # https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis
@@ -916,26 +930,11 @@ binary_cols=data[demography].loc[:, binary_cols].columns
 ```
 
 ```python
-# All Numeric Variables' Box Plots in one figure
-sns.set()
-# Prepare figure. Create individual axes where each box plot will be placed
-fig, axes = plt.subplots(4, int(len(binary_cols) / 4), figsize=(20, 20))
-# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
-for ax, feat in zip(axes.flatten(), binary_cols): 
-# Notice the zip() function and flatten() method
-    sns.countplot(x=data[feat], ax=ax)
-# Layout# Add a centered title to the figure:
-title = "Preferences Vars"
-plt.suptitle(title)
-        
-plt.show()
+generate_count_plots(data[demography])
 ```
 
 ```python
 data['PERCGOV']=data['LOCALGOV']+data['STATEGOV']+data['FEDGOV']
-```
-
-```python
 data['PERCMINORITY']=100-data['ETH1']
 ```
 
@@ -946,20 +945,7 @@ demography_kept=['is_male','MALEMILI', 'MALEVET', 'VIETVETS', 'WWIIVETS','PERCGO
 ```
 
 ```python
-# Prepare figure
-fig = plt.figure(figsize=(20, 20))
-# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
-corr = np.round(data[demography_kept].corr(method="spearman"), decimals=2)
-# Build annotation matrix (values above |0.5| will appear annotated in the plot)
-mask_annot = np.absolute(corr.values) >= 0.5
-annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
-# Plot heatmap of the correlation matrix
-sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
-            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
-# Layout
-fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
-plt.show()
+generate_corr_matrix(data[demography_kept])
 ```
 
 ```python
@@ -991,50 +977,7 @@ metric_features = ['MALEMILI', 'MALEVET', 'VIETVETS', 'WWIIVETS', 'PERCGOV', 'PO
 ```
 
 ```python
-# All Numeric Variables' Box Plots in one figure
-sns.set()
-
-# Prepare figure. Create individual axes where each box plot will be placed
-fig, axes = plt.subplots(2, math.ceil(len(metric_features) / 2), figsize=(20, 11))
-
-# Plot data
-# Iterate across axes objects and associate each box plot (hint: use the ax argument):
-for ax, feat in zip(axes.flatten(), metric_features): # Notice the zip() function and flatten() method
-    sns.boxplot(data[feat], ax=ax)
-    
-# Layout
-# Add a centered title to the figure:
-title = "Numeric Variables' Box Plots"
-
-plt.suptitle(title)
-
-plt.show()
-```
-
-```python
-# All Numeric Variables' Histograms in one figure
-sns.set() #setting the sns. A way to have some preconfigured graphs in our visualizations.
-
-# Prepare figure. Create individual axes where each histogram will be placed
-fig, axes = plt.subplots(2, math.ceil(len(metric_features) / 2), figsize=(20, 11))
-#a figure with squares where we are going to add stuff into.
-#We are going to add stuff into the axis and the figure is where we are going to see the information.
-#we want two rows and the next number of columns according to the number of features that we have.
-#The number of metric features in divided by to and is upper rounded.
-
-# Plot data
-# Iterate across axes objects and associate each histogram (hint: use the ax.hist() instead of plt.hist()):
-for ax, feat in zip(axes.flatten(), metric_features): # Notice the zip() function and flatten() method
-    ax.hist(data[feat], bins = 10)
-    ax.set_title(feat)
-    
-# Layout
-# Add a centered title to the figure:
-title = "Numeric Variables' Histograms"
-
-plt.suptitle(title)
-
-plt.show()
+generate_box_plots(data[metric_features])
 ```
 
 ```python
@@ -1082,20 +1025,7 @@ df_standard[demography_kept]
 ```
 
 ```python
-# Prepare figure
-fig = plt.figure(figsize=(20, 20))
-# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
-corr = np.round(df_standard[demography_kept].corr(method="spearman"), decimals=2)
-# Build annotation matrix (values above |0.5| will appear annotated in the plot)
-mask_annot = np.absolute(corr.values) >= 0.5
-annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
-# Plot heatmap of the correlation matrix
-sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
-            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
-# Layout
-fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
-plt.show()
+generate_corr_matrix(data[demography_kept])
 ```
 
 ## Principal Components Analysis
@@ -1181,18 +1111,7 @@ df_standard[demography_kept]
 ## K-means
 
 ```python
-## K Means
-inertia=[]
-k=range(2, 10)
-for i in k:
-        kmeans=KMeans(n_clusters=i, random_state=45).fit(df_standard[demography_kept])
-        inertia.append(kmeans.inertia_)
-        
-plt.plot(k, inertia, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Inertia')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
+plot_inertia(df_standard[demography_kept], KMeans, 2, 10)
 ```
 
 ```python
