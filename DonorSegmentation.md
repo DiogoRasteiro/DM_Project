@@ -191,7 +191,7 @@ def radar_factory(num_vars, frame='circle'):
     register_projection(RadarAxes)
     return theta
 
-def visualize_clusters(data):
+def visualize_clusters(data, title='Cluster Visualization'):
     N = len(data.columns)
     theta = radar_factory(N, frame='polygon')
 
@@ -225,6 +225,52 @@ def visualize_clusters(data):
 
     plt.show()
 
+```
+
+```python
+def cluster_profiles(df, columns, label_columns, figsize, compar_titles=None):
+    """
+    Pass df with labels columns of one or multiple clustering labels. 
+    Then specify this label columns to perform the cluster profile according to them.
+    """
+    if compar_titles == None:
+        compar_titles = [""]*len(label_columns)
+        
+    sns.set()
+    fig, axes = plt.subplots(nrows=len(label_columns), ncols=2, figsize=figsize, squeeze=False)
+    for ax, cols_to_use, label, titl in zip(axes, columns, label_columns, compar_titles):
+        # Filtering df
+        drop_cols = [i for i in label_columns if i!=label]
+        dfax = df.drop(drop_cols, axis=1)
+        dfax = dfax[cols_to_use]
+        dfax[label] = df[label]
+        
+        # Getting the cluster centroids and counts
+        centroids = dfax.groupby(by=label, as_index=False).mean()
+        counts = dfax.groupby(by=label, as_index=False).count().iloc[:,[0,1]]
+        counts.columns = [label, "counts"]
+        
+        # Setting Data
+        pd.plotting.parallel_coordinates(centroids, label, color=sns.color_palette(), ax=ax[0],linewidth=10)
+        sns.barplot(x=label, y="counts", data=counts, ax=ax[1])
+
+        #Setting Layout
+        handles, _ = ax[0].get_legend_handles_labels()
+        cluster_labels = ["Cluster {}".format(i) for i in range(len(handles))]
+        ax[0].annotate(text=titl, xy=(0.95,1.1), xycoords='axes fraction', fontsize=13, fontweight = 'heavy') 
+        ax[0].legend(handles, cluster_labels) # Adaptable to number of clusters
+        ax[0].axhline(color="black", linestyle="--")
+        ax[0].set_title("Cluster Means - {} Clusters".format(len(handles)), fontsize=13)
+        ax[0].set_xticklabels(ax[0].get_xticklabels(), rotation=-20)
+        ax[1].set_xticklabels(cluster_labels)
+        ax[1].set_xlabel("")
+        ax[1].set_ylabel("Absolute Frequency")
+        ax[1].set_title("Cluster Sizes - {} Clusters".format(len(handles)), fontsize=13)
+    
+    plt.subplots_adjust(hspace=0.4, top=0.90)
+    plt.suptitle("Cluster Simple Profilling", fontsize=23)
+    plt.show()
+    
 ```
 
 ```python
@@ -274,16 +320,19 @@ def get_r2_scores(df, clusterer, min_k=2, max_k=10, labels=None):
 ```
 
 ```python
-def plot_inertia(df, clusterer, n_start, n_stop):
+def plot_inertia(df, clusterer, n_start, n_stop, verbose=True):
     ## K Means
     inertia=[]
     k=range(n_start, n_stop)
     for i in k:
-            clusters=clusterer(n_clusters=i, random_state=45).fit(df)
-            try:
-                inertia.append(clusters.inertia_)
-            except:
-                inertia.append(clusters.cost_)
+        print(f'Running for k = {i}')
+        clusters=clusterer(n_clusters=i, random_state=45).fit(df)
+        try:
+            inertia.append(clusters.inertia_)
+        except:
+            inertia.append(clusters.cost_)
+        if(verbose):
+            print(f'Inertia for k = {i} is {inertia[-1]}')
 
     plt.plot(k, inertia, 'bx-')
     plt.xlabel('k')
@@ -493,10 +542,10 @@ def generate_component_planes(sm):
     plt.show()
 ```
 
-# Feature Selection
+# Preferences
 
 
-Preferences
+## Feature Selection
 
 ```python
 binary_cols = data.apply(lambda x: max(x) == 1, 0)
@@ -511,36 +560,15 @@ generate_count_plots(data[preferences], 'Preference Perspective')
 preferences=data[preferences].drop(columns=['KIDSTUFF', 'BOATS', 'HOMEE']).columns
 ```
 
-```python
-k_means_preferences = KMeans(random_state=10, 
-                             n_clusters = 500,
-                             init = 'k-means++',
-                             n_init = 10,
-                             max_iter = 500)
-k_means_preferences.fit(data[preferences])
-```
-
 # KMODES
 
 ```python
-## K Modes
-costs=[]
-k=range(2, 7)
-for i in k:
-        kM = KModes(n_clusters=i, init='Huang')
-        cls = kM.fit_predict(data[preferences])
-        costs.append(kM.cost_)
-        
-plt.plot(k, costs, 'bx-')
-plt.xlabel('k')
-plt.ylabel('Cost')
-plt.title('The Elbow Method showing the optimal k')
-plt.show()
+plot_inertia(data[preferences], KModes, 2, 7)
 ```
 
 
 ```python
-km = KModes(n_clusters=5, random_state=45, init='Huang', verbose=1)
+km = KModes(n_clusters=6, random_state=45, init='Huang', verbose=1)
 
 clusters = km.fit_predict(data[preferences])
 
@@ -562,7 +590,11 @@ data['Preferences_KModes'].value_counts()
 ```
 
 ```python
-r2(data[preferences],data['Preferences_KModes'])
+r2_calc_label(data, preferences, 'Preferences_KModes')
+```
+
+```python
+cluster_profiles(data, [preferences], ['Preferences_KModes'], (28,10))
 ```
 
 # T-SNE
@@ -570,9 +602,6 @@ r2(data[preferences],data['Preferences_KModes'])
 ```python
 # This is step can be quite time consuming
 two_dim = TSNE(random_state=42).fit_transform(data[preferences])
-```
-
-```python
 # t-SNE visualization
 pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=data['Preferences_Kmeans'], colormap='tab10', figsize=(15,10))
 plt.show()
