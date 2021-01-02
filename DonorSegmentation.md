@@ -30,6 +30,7 @@ from sklearn.impute import KNNImputer
 from pandas_profiling import ProfileReport
 from datetime import datetime
 from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.metrics import pairwise_distances
 from sklearn.base import clone
 from scipy.cluster.hierarchy import dendrogram, linkage
 from sklearn.cluster import AgglomerativeClustering
@@ -38,7 +39,10 @@ from sklearn.decomposition import PCA
 import math
 from sklearn.mixture import GaussianMixture
 from kmodes.kprototypes import KPrototypes
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, f1_score, recall_score, classification_report
 import umap
+from sklearn.tree import DecisionTreeClassifier
 
 
 from matplotlib.patches import Circle, RegularPolygon
@@ -227,52 +231,6 @@ def visualize_clusters(data, title='Cluster Visualization'):
 
     plt.show()
 
-```
-
-```python
-def cluster_profiles(df, columns, label_columns, figsize, compar_titles=None):
-    """
-    Pass df with labels columns of one or multiple clustering labels. 
-    Then specify this label columns to perform the cluster profile according to them.
-    """
-    if compar_titles == None:
-        compar_titles = [""]*len(label_columns)
-        
-    sns.set()
-    fig, axes = plt.subplots(nrows=len(label_columns), ncols=2, figsize=figsize, squeeze=False)
-    for ax, cols_to_use, label, titl in zip(axes, columns, label_columns, compar_titles):
-        # Filtering df
-        drop_cols = [i for i in label_columns if i!=label]
-        dfax = df.drop(drop_cols, axis=1)
-        dfax = dfax[cols_to_use]
-        dfax[label] = df[label]
-        
-        # Getting the cluster centroids and counts
-        centroids = dfax.groupby(by=label, as_index=False).mean()
-        counts = dfax.groupby(by=label, as_index=False).count().iloc[:,[0,1]]
-        counts.columns = [label, "counts"]
-        
-        # Setting Data
-        pd.plotting.parallel_coordinates(centroids, label, color=sns.color_palette(), ax=ax[0],linewidth=10)
-        sns.barplot(x=label, y="counts", data=counts, ax=ax[1])
-
-        #Setting Layout
-        handles, _ = ax[0].get_legend_handles_labels()
-        cluster_labels = ["Cluster {}".format(i) for i in range(len(handles))]
-        ax[0].annotate(text=titl, xy=(0.95,1.1), xycoords='axes fraction', fontsize=13, fontweight = 'heavy') 
-        ax[0].legend(handles, cluster_labels) # Adaptable to number of clusters
-        ax[0].axhline(color="black", linestyle="--")
-        ax[0].set_title("Cluster Means - {} Clusters".format(len(handles)), fontsize=13)
-        ax[0].set_xticklabels(ax[0].get_xticklabels(), rotation=-20)
-        ax[1].set_xticklabels(cluster_labels)
-        ax[1].set_xlabel("")
-        ax[1].set_ylabel("Absolute Frequency")
-        ax[1].set_title("Cluster Sizes - {} Clusters".format(len(handles)), fontsize=13)
-    
-    plt.subplots_adjust(hspace=0.4, top=0.90)
-    plt.suptitle("Cluster Simple Profilling", fontsize=23)
-    plt.show()
-    
 ```
 
 ```python
@@ -650,7 +608,7 @@ cluster_profiles(data, [preferences], ['Preferences_KModes'], (28,10))
 # This is step can be quite time consuming
 two_dim = TSNE(random_state=42).fit_transform(data[preferences])
 # t-SNE visualization
-pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=data['Preferences_Kmeans'], colormap='tab10', figsize=(15,10))
+pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=data['Preferences_KModes'], colormap='tab10', figsize=(15,10))
 plt.show()
 ```
 
@@ -725,7 +683,7 @@ sns.distplot(data['VIETVETS'])
 ```
 
 ```python
-fea_to_del=['HV1', 'AFC1','EC1', 'POBC1', 'MARR1', 'SEC1', 'LFC1', 'is_male', 'WWIIVETS',
+fea_to_del=['HV1', 'AFC1','EC1', 'POBC1', 'MARR1', 'SEC1','is_male', 'LFC1', 'WWIIVETS',
            'HU3', 'HHD4']
 ```
 
@@ -804,7 +762,7 @@ plt.show()
 # This may vary from session to session, and is prone to varying interpretations.
 # A simple example is provided below:
 
-filters = (
+filters_demo = (
     (data['MALEMILI']<=50)
     &
     (data['PERCGOV']<=70)
@@ -816,7 +774,7 @@ filters = (
     (data['IC1']<= 1250)
 )
 
-demo_no_out = data[filters]
+demo_no_out = data[filters_demo]
 ```
 
 ```python
@@ -915,11 +873,81 @@ plot = ['is_male', 'PERCMINORITY','IC1', 'URB_LVL_S',
 ```
 
 ```python
-cluster_profiles(demo_no_out_minmax, [plot] , ['demography_KPrototypes'], (28, 10))
+cluster_profiles(demo_no_out_minmax, [demography_kept] , ['demography_KPrototypes'], (28, 10))
 ```
 
 ```python
 demo_no_out_minmax['demography_KPrototypes'].value_counts()
+```
+
+# Outliers Prediction
+
+```python
+demo_out=data[~filters_demo]
+```
+
+```python
+test=demo_out[demography_kept]
+
+scaler = StandardScaler()
+scaled_feat = scaler.fit_transform(test[numerical])
+scaled_feat
+
+test[numerical] = scaled_feat
+```
+
+```python
+test
+```
+
+```python
+y=demo_no_out_minmax['demography_KPrototypes']
+X=demo_no_out_minmax[demography_kept]
+X_train, X_val, y_train, y_val=train_test_split(X,
+                                                y,
+                                                stratify=y, 
+                                                test_size=0.25, 
+                                                random_state=10)
+```
+
+```python
+dt=DecisionTreeClassifier(random_state=10)
+
+dt.fit(X_train,y_train)
+
+y_train_pred=dt.predict(X_train)
+y_pred=dt.predict(X_val)
+
+print(classification_report(y_train,y_train_pred))
+print(classification_report(y_val,y_pred))
+```
+
+```python
+test['demography_KPrototypes']=dt.predict(test)
+```
+
+```python
+test['demography_KPrototypes'].value_counts()
+```
+
+```python
+demo_labels=pd.concat([demo_no_out_minmax,test], )
+```
+
+```python
+demo_labels
+```
+
+```python
+data
+```
+
+```python
+data=data.join(demo_labels['demography_KPrototypes'], how='left')
+```
+
+```python
+data['demography_KPrototypes']
 ```
 
 ```python
@@ -1152,7 +1180,7 @@ value_no_out = data[filters]
 ```
 
 ```python
-print('Percentage of data kept after removing outliers:', (np.round(df_outliers.shape[0] / data.shape[0], 4))*100)
+print('Percentage of data kept after removing outliers:', (np.round(value_no_out.shape[0] / data.shape[0], 4))*100)
 ```
 
 ## Data Normalization
@@ -1170,10 +1198,6 @@ scaled_feat
 ```python
 df_standard[value_kept] = scaled_feat
 df_standard.head()
-```
-
-```python
-df_standard[value_kept]
 ```
 
 ```python
@@ -1314,6 +1338,76 @@ cluster_profiles(df_standard, [value_kept], ['value_Kmeans'], (28, 10))
 
 ```python
 r2_calc_label(df_standard,value_kept,label='value_Kmeans')
+```
+
+# Outliers Prediction
+
+```python
+value_out=data[~filters]
+```
+
+```python
+test=value_out[value_kept]
+
+scaler = StandardScaler()
+scaled_feat = scaler.fit_transform(test[value_kept])
+scaled_feat
+
+test[value_kept] = scaled_feat
+```
+
+```python
+test
+```
+
+```python
+y=df_standard['value_Kmeans']
+X=df_standard[value_kept]
+X_train, X_val, y_train, y_val=train_test_split(X,
+                                                y,
+                                                stratify=y, 
+                                                test_size=0.25, 
+                                                random_state=10)
+```
+
+```python
+dt=DecisionTreeClassifier(random_state=10)
+
+dt.fit(X_train,y_train)
+
+y_train_pred=dt.predict(X_train)
+y_pred=dt.predict(X_val)
+
+print(classification_report(y_train,y_train_pred))
+print(classification_report(y_val,y_pred))
+```
+
+```python
+test['value_Kmeans']=dt.predict(test)
+```
+
+```python
+test['value_Kmeans'].value_counts()
+```
+
+```python
+value_labels=pd.concat([df_standard,test], )
+```
+
+```python
+value_labels
+```
+
+```python
+data
+```
+
+```python
+data=data.join(value_labels['value_Kmeans'], how='left')
+```
+
+```python
+
 ```
 
 ## Hierarchical Clustering on Top of K-Means
@@ -1645,6 +1739,10 @@ data_pca=df_standard[value_kept].copy()
 ```
 
 ```python
+data_pca
+```
+
+```python
 pca=PCA(n_components='mle', random_state=45).fit(data_pca)
 ```
 
@@ -1659,7 +1757,7 @@ pd.DataFrame(
 ```
 
 ```python
-pca=PCA(n_components=3, random_state=45)
+pca=PCA(n_components=5, random_state=45)
 pca_feat = pca.fit_transform(data_pca)
 pca_feat_names = [f"PC{i}" for i in range(pca.n_components_)]
 pca_df = pd.DataFrame(pca_feat, index=data_pca.index, columns=pca_feat_names)  # remember index=df_pca.index
@@ -1669,6 +1767,21 @@ pca_df
 ```python
 data_pca = pd.concat([data_pca, pca_df], axis=1)
 data_pca.head()
+```
+
+```python
+pca_metrics=pd.DataFrame(
+    {"Eigenvalue": pca.explained_variance_,
+     "Difference": np.insert(np.diff(pca.explained_variance_), 0, 0),
+     "Proportion": pca.explained_variance_ratio_,
+     "Cumulative": np.cumsum(pca.explained_variance_ratio_)},
+    index=range(1, pca.n_components_ + 1)
+)
+pca_metrics['Proportion'].plot(kind='bar')
+plt.xlabel('PCA')
+plt.xticks(ticks=[0,1,2,3,4],labels=[0,1,2,3,4])
+plt.ylabel('Variance Explained')
+plt.show()
 ```
 
 ```python
@@ -1687,7 +1800,7 @@ loadings.style.applymap(_color_red_or_green)
 ```
 
 ```python
-principal_components = ['PC0', 'PC1', 'PC2']
+principal_components = ['PC0', 'PC1', 'PC2','PC4']
 ```
 
 ```python
@@ -1705,7 +1818,7 @@ plt.show()
 ```
 
 ```python
-kmeans=KMeans(n_clusters=4, random_state=45).fit(data_pca[principal_components])
+kmeans=KMeans(n_clusters=5, random_state=45).fit(data_pca[principal_components])
 clusters_PCA=pd.DataFrame(kmeans.cluster_centers_, columns=principal_components)
 ```
 
@@ -1715,10 +1828,6 @@ labels=kmeans.predict(data_pca[principal_components])
 
 ```python
 data_pca['PCA_Clusters']=labels
-```
-
-```python
-
 ```
 
 ```python
@@ -1737,59 +1846,21 @@ r2_calc_label(data_pca, data_pca[principal_components].columns, label='PCA_Clust
 cluster_profiles(data_pca,[principal_components],['PCA_Clusters'],(28,10))
 ```
 
-# Gaussian Mixture
+PC0: Quanto maior PC0, Menos doações e menos Frequencia <br>
+PC1: Quanto maior PC1, Mais Valor doado total e mais valor medio por doacao <br>
+PC2: QUANTO MAIOR PC2, maior o valor medio por doaçao menor o intervalo entre doacoes e doacao maxima feitas há menos tempo <br>
+PC4: QUANTO MAIOR, menor o numero de promocoes recebidas, menor o intervalo entre doacoes e maxima doação feita há mais tempo
 
 ```python
-# Selecting number of components based on AIC and BIC
-n_components = np.arange(1, 16)
-models = [GaussianMixture(n, covariance_type='full', n_init=10, random_state=1).fit(df_standard[value_kept])
-          for n in n_components]
-
-bic_values = [m.bic(df_standard[value_kept]) for m in models]
-aic_values = [m.aic(df_standard[value_kept]) for m in models]
-plt.plot(n_components, bic_values, label='BIC')
-plt.plot(n_components, aic_values, label='AIC')
-plt.legend(loc='best')
-plt.xlabel('n_components')
-plt.xticks(n_components)
-plt.show()
+Azul: - Doações, - Menos Freq, AVG Valor doado Total e - Valor por Doação, + tempo Doacao Max
+Vermelho:- Doações, Avg Menos Freq, +Valor doado Total, + Valor por Doação
+Verde
+Amarelo
+Roxo
 ```
 
 ```python
-# Performing GMM clustering
-gmm = GaussianMixture(n_components=6, covariance_type='full', n_init=10, init_params='kmeans', random_state=1)
-gmm_labels = gmm.fit_predict(df_standard[value_kept])
-labels_proba = gmm.predict_proba(df_standard[value_kept])
-```
-
-```python
-# The estimated component weights
-gmm.weights_
-```
-
-```python
-# The estimated mean vectors of the Components
-gmm.means_
-```
-
-```python
-# The estimated covariance matrices of the Components
-gmm.covariances_.shape
-```
-
-```python
-# Concatenating the labels to df
-df_concat = pd.concat([df_standard[value_kept], pd.Series(gmm_labels, index=df_outliers2.index, name="gmm_labels")], axis=1)
-df_concat.head()
-```
-
-```python
-# Computing the R^2 of the cluster solution
-sst = get_ss(df_standard[value_kept])  # get total sum of squares
-ssw_labels = df_concat.groupby(by='gmm_labels').apply(get_ss)  # compute ssw for each cluster labels
-ssb = sst - np.sum(ssw_labels)  # remember: SST = SSW + SSB
-r2_score = ssb / sst
-print("Cluster solution with R^2 of %0.4f" % r2_score)
+data_pca.groupby('PCA_Clusters')[value_kept].mean()
 ```
 
 # T-SNE
@@ -1805,11 +1876,323 @@ pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=df_outliers2['value_Kmeans'], col
 plt.show()
 ```
 
+# Cluster Analysis
+
+```python
+# data.to_csv('data/data_labels.csv', index=True)
+```
+
+```python
+data = pd.read_csv('data/data_labels.csv', index_col='CONTROLN')
+data.head()
+```
+
+```python
+final_keep = [
+    'COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'HOMEE', 'PETS', 'CDPLAY',
+    'STEREO', 'PCOWNERS', 'PHOTO', 'CRAFTS', 'FISHER', 'GARDENIN', 'BOATS',
+    'WALKER', 'KIDSTUFF', 'CARDS', 'PLATES', 'MALEMILI', 'MALEVET', 'VIETVETS',
+    'PERCGOV', 'POP901', 'PERCMINORITY', 'AGE901', 'IC1', 'URB_LVL_S',
+    'URB_LVL_R', 'URB_LVL_C', 'URB_LVL_T', 'SOCIO_ECO', 'HIT', 'NUMPRM12',
+    'RAMNTALL', 'AVGGIFT', 'RFA_2F', 'NREPLIES', 'MAXRDATE_DAYS',
+    'DAYS_PER_GIFT'
+]
+value_kept = [
+    'HIT', 'NUMPRM12', 'RAMNTALL', 'AVGGIFT', 'RFA_2F', 'NREPLIES',
+    'MAXRDATE_DAYS', 'DAYS_PER_GIFT'
+]
+preferences_kept = [
+    'COLLECT1', 'VETERANS', 'BIBLE', 'CATLG', 'PETS', 'CDPLAY', 'STEREO',
+    'PCOWNERS', 'PHOTO', 'CRAFTS', 'FISHER', 'GARDENIN', 'WALKER', 'CARDS',
+    'PLATES'
+]
+demography_kept = [
+    'MALEMILI', 'MALEVET', 'VIETVETS', 'PERCGOV', 'POP901', 'PERCMINORITY',
+    'AGE901', 'IC1', 'URB_LVL_S', 'URB_LVL_R', 'URB_LVL_C', 'URB_LVL_T',
+    'SOCIO_ECO'
+]
+```
+
+```python
+numerical = []
+
+for col in data[final_keep].columns:
+    if max(data[col] > 1):
+        numerical.append(col)
+numerical
+```
+
+```python
+data_minmax=data.copy()
+
+scaler = MinMaxScaler()
+scaled_feat = scaler.fit_transform(data_minmax[numerical])
+
+data_minmax[numerical] = scaled_feat
+data_minmax.head()
+```
+
+```python
+data_std=data.copy()
+
+scaler = StandardScaler()
+scaled_feat = scaler.fit_transform(data_std[numerical])
+
+data_std[numerical] = scaled_feat
+data_std.head()
+```
+
+```python
+def label_cluster_preferences(label):
+    if(label==0):
+        return "No Preferences"
+    elif(label==1):
+        return "Pets & Gardening"
+    elif(label==2):
+        return 'Veteran Lovers'
+```
+
+```python
+def label_cluster_demography(label):
+    if(label==0):
+        return "High Income Families"
+    elif(label==1):
+        return "Military and Government Families"
+    elif(label==2):
+        return 'Low Income and Minority Families'
+    elif(label==3):
+        return 'Rural Average Families'
+```
+
+```python
+def label_cluster_value(label):
+    if(label==0):
+        return "Average Donors"
+    elif(label==1):
+        return "High Potential Donors"
+    elif(label==2):
+        return 'Active Low-spending Donors'
+    elif(label==3):
+        return 'High Value Donors'
+```
+
+```python
+cluster_profiles(data_minmax, [preferences_kept], ['Preferences_KModes'], (20, 5))
+```
+
+```python
+cluster_profiles(data_std, [demography_kept], ['demography_KPrototypes'], (20,5))
+```
+
+```python
+cluster_profiles(data_std, [value_kept], ['value_Kmeans'], (20,5))
+```
+
+# Contingency Tables
+
+```python
+data.groupby(['Preferences_KModes','demography_KPrototypes'])\
+.size()\
+.to_frame()\
+.reset_index()\
+.pivot('Preferences_KModes','demography_KPrototypes' , 0)
+```
+
+## Cluster Merging First Round
+
+```python
+# Clusters with low frequency to be merged:
+to_merge = [(2,1), (1,1), (2,2)]
+df_centroids = data_std.groupby(['Preferences_KModes','demography_KPrototypes'])\
+    [final_keep].mean()
+
+# Computing the euclidean distance matrix between the centroids
+euclidean = pairwise_distances(df_centroids[numerical])
+df_dists = pd.DataFrame(
+    euclidean, columns=df_centroids.index, index=df_centroids.index
+)
+
+# Merging each low frequency clustering (source) to the closest cluster (target)
+source_target = {}
+for clus in to_merge:
+    if clus not in source_target.values():
+        source_target[clus] = df_dists.loc[clus].sort_values().index[1]
+
+source_target
+```
+
+```python
+for source, target in source_target.items():
+    mask = (data['Preferences_KModes']==source[0]) & (data['demography_KPrototypes']==source[1])
+    data.loc[mask, 'Preferences_KModes'] = target[0]
+    data.loc[mask, 'demography_KPrototypes'] = target[1]# New contigency table
+    
+data.groupby(['Preferences_KModes','demography_KPrototypes'])\
+    .size()\
+    .to_frame()\
+    .reset_index()\
+    .pivot('Preferences_KModes','demography_KPrototypes', 0)
+```
+
+```python
+generate_dendrogram(df_centroids[numerical], 'ward')
+```
+
+```python
+# Re-running the Hierarchical clustering based on the correct number of clusters
+hclust = AgglomerativeClustering(
+    linkage='ward', 
+    affinity='euclidean', 
+    n_clusters=4
+)
+hclust_labels = hclust.fit_predict(df_centroids[numerical])
+df_centroids['hclust_labels'] = hclust_labels
+
+df_centroids
+```
+
+```python
+# Mapper between concatenated clusters and hierarchical clusters
+cluster_mapper = df_centroids['hclust_labels'].to_dict()
+
+data_ = data.copy()
+
+# Mapping the hierarchical clusters on the centroids to the observations
+data_['merged_labels'] = data_.apply(
+    lambda row: cluster_mapper[
+        (row['Preferences_KModes'], row['demography_KPrototypes'])
+    ], axis=1
+)
+
+# Merged cluster centroids
+data_.groupby('merged_labels').mean()[final_keep]
+```
+
+## Cluster Merging Second Round
+
+```python
+data_std=data_.copy()
+
+scaler = StandardScaler()
+scaled_feat = scaler.fit_transform(data_std[numerical])
+
+data_std[numerical] = scaled_feat
+data_std.head()
+```
+
+```python
+data_.groupby(['value_Kmeans','merged_labels'])\
+.size()\
+.to_frame()\
+.reset_index()\
+.pivot('value_Kmeans','merged_labels' , 0)
+```
+
+```python
+# Clusters with low frequency to be merged:
+to_merge = [(1,0), (2,0), (3,2), (3,0)]
+df_centroids = data_std.groupby(['value_Kmeans','merged_labels'])\
+    [final_keep].mean()
+
+# Computing the euclidean distance matrix between the centroids
+euclidean = pairwise_distances(df_centroids[numerical])
+df_dists = pd.DataFrame(
+    euclidean, columns=df_centroids.index, index=df_centroids.index
+)
+
+# Merging each low frequency clustering (source) to the closest cluster (target)
+source_target = {}
+for clus in to_merge:
+    if clus not in source_target.values():
+        source_target[clus] = df_dists.loc[clus].sort_values().index[1]
+
+source_target
+```
+
+```python
+for source, target in source_target.items():
+    mask = (data_['value_Kmeans']==source[0]) & (data_['merged_labels']==source[1])
+    data_.loc[mask, 'value_Kmeans'] = target[0]
+    data_.loc[mask, 'merged_labels'] = target[1]# New contigency table
+    
+data_.groupby(['value_Kmeans','merged_labels'])\
+    .size()\
+    .to_frame()\
+    .reset_index()\
+    .pivot('value_Kmeans','merged_labels', 0)
+```
+
+```python
+generate_dendrogram(df_centroids[numerical], 'ward')
+```
+
+```python
+# Re-running the Hierarchical clustering based on the correct number of clusters
+hclust = AgglomerativeClustering(
+    linkage='ward', 
+    affinity='euclidean', 
+    n_clusters=4
+)
+hclust_labels = hclust.fit_predict(df_centroids[numerical])
+df_centroids['hclust_labels'] = hclust_labels
+
+df_centroids
+```
+
+```python
+# Mapper between concatenated clusters and hierarchical clusters
+cluster_mapper = df_centroids['hclust_labels'].to_dict()
+
+
+# Mapping the hierarchical clusters on the centroids to the observations
+data_['final_labels'] = data_.apply(
+    lambda row: cluster_mapper[
+        (row['value_Kmeans'], row['merged_labels'])
+    ], axis=1
+)
+
+# Merged cluster centroids
+data_.groupby('final_labels').mean()[final_keep]
+```
+
+```python
+data['final_labels'] = data_['final_labels']
+```
+
+```python
+data_minmax=data.copy()
+
+scaler = MinMaxScaler()
+scaled_feat = scaler.fit_transform(data_minmax[final_keep])
+
+data_minmax[final_keep] = scaled_feat
+data_minmax.head()
+```
+
+```python
+data_std=data.copy()
+
+scaler = StandardScaler()
+scaled_feat = scaler.fit_transform(data_std[numerical])
+
+data_std[numerical] = scaled_feat
+data_std.head()
+```
+
 ## Population Characteristics
 
 ```python
-sns.set_style(style="darkgrid")
-gender=data['GENDER'].map(lambda x: 'U' if x==" " else x)
-perc_gender=round(gender.value_counts()/len(data['GENDER'])*100, 2)
-perc_gender.plot(kind='pie', colors=['fuchsia','royalblue','forestgreen','black'])
+cluster_profiles(data, [preferences_kept], ['final_labels'], figsize=(28,10))
+```
+
+```python
+cluster_profiles(data_std, [demography_kept], ['final_labels'], figsize=(28,10))
+```
+
+```python
+cluster_profiles(data_std, [value_kept], ['final_labels'], figsize=(28,10))
+```
+
+```python
+
 ```
