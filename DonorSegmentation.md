@@ -706,8 +706,8 @@ print('Percentage of data kept after removing outliers:', (np.round(df_outliers.
 numerical = df_outliers[demography_kept].loc[:,df_outliers[demography_kept].apply(lambda x: x.max()>1, axis=0)]
 
 for c in numerical.columns:
-pt = PowerTransformer()
-numerical.loc[:, c] = pt.fit_transform(np.array(numerical[c]).reshape(-1, 1))
+    pt = PowerTransformer()
+    numerical.loc[:, c] = pt.fit_transform(np.array(numerical[c]).reshape(-1, 1))
 
 ##preprocessing categorical
 categorical = df_outliers[demography_kept].drop(columns=numerical.columns)
@@ -837,6 +837,14 @@ plt.show()
 ```python
 value_kept=['HIT', 'CARDPROM', 'CARDPM12', 'NUMPRM12', 'RAMNTALL', 'NGIFTALL', 'MINRAMNT', 
        'MAXRAMNT', 'LASTGIFT', 'AVGGIFT', 'RFA_2F', 'NREPLIES', 'AVG_AMNT', 'LASTDATE_DAYS', 'MAXRDATE_DAYS', 'DAYS_PER_GIFT']
+```
+
+```python
+data[value_kept].describe()
+```
+
+```python
+value_kept = data[value_kept].drop(columns = 'LASTDATE_DAYS').columns
 ```
 
 ```python
