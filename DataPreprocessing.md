@@ -205,11 +205,6 @@ Then, we begin dealing with the missing values themselves.
 
 Due to the large amount of variables, it is impossible to look at each column individually. Therefore, we decided that any column with a high amount of missing values(over 10% of the observations) should be dropped, because such features don't provide enough information and trying to fill such a large amount of missing values would worsen the data quality too much.
 
-```python
-# Through data.isnull().mean(), we calculate the % of missing values for each column
-# We then alter the dataframe, keeping only those with less than 10% missing values.
-data=data.loc[:, data.isnull().mean() <= .1]
-```
 
 Finally, with the largest of missing values out of the way, we can deal with the remaining on a case-by-case basis.
 
@@ -235,6 +230,12 @@ fig, ax = plt.subplots(figsize=(5, 5))
 missing[(missing[0]<=0.1) & (missing[0]>0)].plot(kind='bar', ax=ax)
 plt.axhline(y=0.1, color='red', linestyle='--')
 yticks=plt.yticks(ticks=[1.0,0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1])
+```
+
+```python
+# Through data.isnull().mean(), we calculate the % of missing values for each column
+# We then alter the dataframe, keeping only those with less than 10% missing values.
+data=data.loc[:, data.isnull().mean() <= .1]
 ```
 
 For 'FISTDATE', since there are only 2 rows with missing values, we decided to exclude them since they represent a very small loss in quantity.
@@ -386,9 +387,7 @@ data.isna().sum()
 imputer = KNNImputer(n_neighbors=1)
 KNN=imputer.fit_transform(data)
 KNN
-####
-####
-#Há valores diferentes de 0 e 1
+
 ```
 
 ```python
@@ -453,6 +452,8 @@ data.drop(columns=to_drop,inplace=True,axis=1)
 ```python
 data.to_csv('data/donorsPreprocessed.csv', index=True)
 ```
+
+
 ```python
 data.isna().sum()
 ```
