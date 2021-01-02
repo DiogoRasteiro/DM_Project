@@ -8,3 +8,4 @@ data/donors.csv
 .ipynb_checkpoints/*
 backup/*
 DonorSegmentation-CLUSTERSALBERNAS.md
+DonorSegmentationOld.md
