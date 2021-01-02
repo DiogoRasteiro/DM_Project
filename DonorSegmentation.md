@@ -257,7 +257,7 @@ def cluster_profiles(df, columns, label_columns, figsize, compar_titles=None):
         #Setting Layout
         handles, _ = ax[0].get_legend_handles_labels()
         cluster_labels = ["Cluster {}".format(i) for i in range(len(handles))]
-        ax[0].annotate(text=titl, xy=(0.95,1.1), xycoords='axes fraction', fontsize=13, fontweight = 'heavy') 
+        ax[0].annotate(text=titl,xy=(0.95,1.1), xycoords='axes fraction', fontsize=13, fontweight = 'heavy') 
         ax[0].legend(handles, cluster_labels) # Adaptable to number of clusters
         ax[0].axhline(color="black", linestyle="--")
         ax[0].set_title("Cluster Means - {} Clusters".format(len(handles)), fontsize=13)
@@ -416,7 +416,7 @@ def generate_box_plots(df, title='Box Plots'):
 ```
 
 ```python
-def generate_silhouette_plots(df, clusterer, range_clusters):
+def generate_silhouette_plots(df, clusterer, range_clusters, metric='euclidean'):
     # Adapted from:
     # https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis
 
@@ -431,14 +431,14 @@ def generate_silhouette_plots(df, clusterer, range_clusters):
 
         # The silhouette_score gives the average value for all the samples.
         # This gives a perspective into the density and separation of the formed clusters
-        silhouette_avg = silhouette_score(data[preferences], cluster_labels)
+        silhouette_avg = silhouette_score(data[preferences], cluster_labels, metric=metric)
         avg_silhouette.append(silhouette_avg)
         print(
             f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}"
         )
 
         # Compute the silhouette scores for each sample
-        sample_silhouette_values = silhouette_samples(df, cluster_labels)
+        sample_silhouette_values = silhouette_samples(df, cluster_labels, metric=metric)
 
         y_lower = 10
         for i in range(nclus):
@@ -568,7 +568,7 @@ plot_inertia(data[preferences], KModes, 2, 7)
 
 
 ```python
-km = KModes(n_clusters=6, random_state=45, init='Huang', verbose=1)
+km = KModes(n_clusters=3, random_state=45, init='Huang', verbose=1)
 
 clusters = km.fit_predict(data[preferences])
 
@@ -594,14 +594,18 @@ r2_calc_label(data, preferences, 'Preferences_KModes')
 ```
 
 ```python
-cluster_profiles(data, [preferences], ['Preferences_KModes'], (28,10))
+cluster_profiles(data, [preferences], ['Preferences_KModes'], (28, 10))
 ```
 
-# T-SNE
+```python
+generate_silhouette_plots(data[preferences], KModes(random_state=45, init='Huang'), [3,4], metric='hamming')
+```
+
+## T-SNE
 
 ```python
 # This is step can be quite time consuming
-two_dim = TSNE(random_state=42).fit_transform(data[preferences])
+# two_dim = TSNE(random_state=42).fit_transform(data[preferences])
 # t-SNE visualization
 pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=data['Preferences_Kmeans'], colormap='tab10', figsize=(15,10))
 plt.show()
@@ -621,27 +625,12 @@ binary_cols=data[demography].loc[:, binary_cols].columns
 ```
 
 ```python
-# All Numeric Variables' Box Plots in one figure
-sns.set()
-# Prepare figure. Create individual axes where each box plot will be placed
-fig, axes = plt.subplots(4, int(len(binary_cols) / 4), figsize=(20, 20))
-# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
-for ax, feat in zip(axes.flatten(), binary_cols): 
-# Notice the zip() function and flatten() method
-    sns.countplot(x=data[feat], ax=ax)
-# Layout# Add a centered title to the figure:
-title = "Preferences Vars"
-plt.suptitle(title)
-        
-plt.show()
-```
-
-```python
-data['PERCGOV']=data['LOCALGOV']+data['STATEGOV']+data['FEDGOV']
+generate_count_plots(data[demography])
 ```
 
 ```python
 data['PERCMINORITY']=100-data['ETH1']
+data['PERCGOV']=data['LOCALGOV']+data['STATEGOV']+data['FEDGOV']
 ```
 
 ```python
@@ -651,20 +640,7 @@ demography_kept=['is_male','MALEMILI', 'MALEVET', 'VIETVETS', 'WWIIVETS','PERCGO
 ```
 
 ```python
-# Prepare figure
-fig = plt.figure(figsize=(20, 20))
-# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
-corr = np.round(data[demography_kept].corr(method="spearman"), decimals=2)
-# Build annotation matrix (values above |0.5| will appear annotated in the plot)
-mask_annot = np.absolute(corr.values) >= 0.5
-annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
-# Plot heatmap of the correlation matrix
-sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
-            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
-# Layout
-fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
-plt.show()
+generate_corr_matrix(data[demography_kept])
 ```
 
 ```python
@@ -696,50 +672,11 @@ metric_features = ['MALEMILI', 'MALEVET', 'VIETVETS', 'WWIIVETS', 'PERCGOV', 'PO
 ```
 
 ```python
-# All Numeric Variables' Box Plots in one figure
-sns.set()
-
-# Prepare figure. Create individual axes where each box plot will be placed
-fig, axes = plt.subplots(2, math.ceil(len(metric_features) / 2), figsize=(20, 11))
-
-# Plot data
-# Iterate across axes objects and associate each box plot (hint: use the ax argument):
-for ax, feat in zip(axes.flatten(), metric_features): # Notice the zip() function and flatten() method
-    sns.boxplot(data[feat], ax=ax)
-    
-# Layout
-# Add a centered title to the figure:
-title = "Numeric Variables' Box Plots"
-
-plt.suptitle(title)
-
-plt.show()
+generate_box_plots(data[metric_features])
 ```
 
 ```python
-# All Numeric Variables' Histograms in one figure
-sns.set() #setting the sns. A way to have some preconfigured graphs in our visualizations.
-
-# Prepare figure. Create individual axes where each histogram will be placed
-fig, axes = plt.subplots(2, math.ceil(len(metric_features) / 2), figsize=(20, 11))
-#a figure with squares where we are going to add stuff into.
-#We are going to add stuff into the axis and the figure is where we are going to see the information.
-#we want two rows and the next number of columns according to the number of features that we have.
-#The number of metric features in divided by to and is upper rounded.
-
-# Plot data
-# Iterate across axes objects and associate each histogram (hint: use the ax.hist() instead of plt.hist()):
-for ax, feat in zip(axes.flatten(), metric_features): # Notice the zip() function and flatten() method
-    ax.hist(data[feat], bins = 10)
-    ax.set_title(feat)
-    
-# Layout
-# Add a centered title to the figure:
-title = "Numeric Variables' Histograms"
-
-plt.suptitle(title)
-
-plt.show()
+generate_count_plots(data[metric_features])
 ```
 
 ```python
@@ -800,48 +737,23 @@ plt.show()
 
 ```python
 df_minmax = df_outliers.copy()
-```
-
-```python
 scaler = MinMaxScaler()
 scaled_feat = scaler.fit_transform(df_minmax[demography_kept])
-scaled_feat
-```
-
-```python
 df_minmax[demography_kept] = scaled_feat
-df_minmax.head()
-```
-
-```python
 df_minmax[demography_kept]
 ```
 
 ```python
-# Prepare figure
-fig = plt.figure(figsize=(20, 20))
-# Obtain correlation matrix. Round the values to 2 decimal cases. Use the DataFrame corr() and round() method.
-corr = np.round(df_minmax[demography_kept].corr(method="spearman"), decimals=2)
-# Build annotation matrix (values above |0.5| will appear annotated in the plot)
-mask_annot = np.absolute(corr.values) >= 0.5
-annot = np.where(mask_annot, corr.values, np.full(corr.shape,"")) # Try to understand what this np.where() does
-# Plot heatmap of the correlation matrix
-sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=True), 
-            fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
-# Layout
-fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
-plt.show()
-```
-
-```python
-df_minmax[demography_kept]
+generate_corr_matrix(df_minmax[demography_kept])
 ```
 
 ## K-Prototypes
 
 ```python
 categorical_columns = [0, 12, 13, 14, 15]
+```
+
+```python
 costs=[]
 k=range(2, 10)
 for i in k:
@@ -856,106 +768,28 @@ plt.show()
 ```
 
 ```python
-kproto = KPrototypes(n_clusters= 15, init='Cao', n_jobs = 4)
+kproto = KPrototypes(n_clusters= 4, init='Huang', n_jobs = -1, random_state=10, verbose=1)
 clusters = kproto.fit_predict(df_minmax[demography_kept], categorical=categorical_columns)
 ```
 
 ```python
-centroids=pd.DataFrame(kproto.cluster_centers_, columns=df_minmax[demography_kept].columns)
+kproto.cluster_centroids_
 ```
 
 ```python
-centroids=np.round(centroids, 4)
+centroids=pd.DataFrame(kproto.cluster_centroids_[0], columns=df_minmax[demography_kept].columns)
 ```
 
 ```python
-pd.DataFrame(scaler.inverse_transform(centroids), columns = demography_kept)
+df_minmax['demography_KPrototypes'] = kproto.labels_
 ```
 
 ```python
-df_outliers[demography_kept].describe(include="all").T
+cluster_profiles(df_minmax, [demography_kept], ['demography_KPrototypes'], (28,10))
 ```
 
 ```python
-df_outliers['demography_KPrototypes'] = kproto.labels_
-```
-
-```python
-K_Prototypes = KPrototypes(random_state=45)
-get_r2_scores(df_minmax[demography_kept], K_Prototypes)
-```
-
-```python
-df_outliers['demography_KPrototypes'].value_counts()
-```
-
-```python
-# Adapted from:
-# https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-range_clusters=[3,4]
-# Storing average silhouette metric
-avg_silhouette = []
-for nclus in range_clusters:
-    # Skip nclus == 1
-    if nclus == 1:
-        continue
-
-    # Create a figure
-    fig = plt.figure(figsize=(13, 7))
- 
-    # Initialize the KMeans object with n_clusters value and a random generator
-    # seed of 10 for reproducibility.
-    kmclust = KMeans(n_clusters=nclus,random_state=45)
-    cluster_labels = kmclust.fit_predict(df_minmax[demography_kept])
- 
-    # The silhouette_score gives the average value for all the samples.
-    # This gives a perspective into the density and separation of the formed clusters
-    silhouette_avg = silhouette_score(df_minmax[demography_kept], cluster_labels)
-    avg_silhouette.append(silhouette_avg)
-    print(f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}")
- 
-    # Compute the silhouette scores for each sample
-    sample_silhouette_values = silhouette_samples(df_minmax[demography_kept], cluster_labels)
- 
-    y_lower = 10
-    for i in range(nclus):
-        # Aggregate the silhouette scores for samples belonging to cluster i, and sort them
-        ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
-        ith_cluster_silhouette_values.sort()
-
-        # Get y_upper to demarcate silhouette y range size
-        size_cluster_i = ith_cluster_silhouette_values.shape[0]
-        y_upper = y_lower + size_cluster_i
-
-        # Filling the silhouette
-        color = cm.nipy_spectral(float(i) / nclus)
-        plt.fill_betweenx(np.arange(y_lower, y_upper),
-                          0, ith_cluster_silhouette_values,
-                          facecolor=color, edgecolor=color, alpha=0.7)
- 
-        # Label the silhouette plots with their cluster numbers at the middle
-        plt.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
- 
-        # Compute the new y_lower for next plot
-        y_lower = y_upper + 10  # 10 for the 0 samples
- 
-    plt.title("The silhouette plot for the various clusters.")
-    plt.xlabel("The silhouette coefficient values")
-    plt.ylabel("Cluster label")
- 
-    # The vertical line for average silhouette score of all the values
-    plt.axvline(x=silhouette_avg, color="red", linestyle="--")
-
-    # The silhouette coefficient can range from -1, 1
-    xmin, xmax = np.round(sample_silhouette_values.min() -0.1, 2), np.round(sample_silhouette_values.max() + 0.1, 2)
-    plt.xlim([xmin, xmax])
-
-    # The (nclus+1)*10 is for inserting blank space between silhouette
-    # plots of individual clusters, to demarcate them clearly.
-    plt.ylim([0, len(df_minmax[demography_kept]) + (nclus + 1) * 10])
- 
-    plt.yticks([])  # Clear the yaxis labels / ticks
-    plt.xticks(np.arange(xmin, xmax, 0.1))
+generate_silhouette_plots(df_minmax[demography_kept], KPrototypes(random_state=45, init='Cao'), [3,4])
 ```
 
 # T-SNE
