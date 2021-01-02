@@ -1861,6 +1861,15 @@ Roxo
 
 ```python
 data_pca.groupby('PCA_Clusters')[value_kept].mean()
+data_pca[value_kept]
+```
+
+```python
+r2_calc_label(data_pca, data_pca[principal_components].columns, label='PCA_Clusters')
+```
+
+```python
+cluster_profiles(data_pca,[principal_components],['PCA_Clusters'],(28,10))
 ```
 
 # T-SNE
@@ -2194,5 +2203,4 @@ cluster_profiles(data_std, [value_kept], ['final_labels'], figsize=(28,10))
 ```
 
 ```python
-
 ```
