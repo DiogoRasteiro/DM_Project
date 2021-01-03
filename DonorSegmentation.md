@@ -670,7 +670,7 @@ sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=
             fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
 # Layout
 fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
+fig.suptitle("Correlation Matrix Demographics", fontsize=20)
 plt.show()
 ```
 
@@ -865,11 +865,6 @@ clusters = kproto.fit_predict(demo_no_out_minmax[demography_kept], categorical=c
 
 ```python
 demo_no_out_minmax['demography_KPrototypes'] = clusters
-```
-
-```python
-plot = ['is_male', 'PERCMINORITY','IC1', 'URB_LVL_S',
-       'URB_LVL_R', 'URB_LVL_C', 'URB_LVL_T']
 ```
 
 ```python
@@ -1406,10 +1401,6 @@ data
 data=data.join(value_labels['value_Kmeans'], how='left')
 ```
 
-```python
-
-```
-
 ## Hierarchical Clustering on Top of K-Means
 
 
@@ -1739,6 +1730,10 @@ data_pca=df_standard[value_kept].copy()
 ```
 
 ```python
+data_pca
+```
+
+```python
 pca=PCA(n_components='mle', random_state=45).fit(data_pca)
 ```
 
@@ -1753,7 +1748,7 @@ pd.DataFrame(
 ```
 
 ```python
-pca=PCA(n_components=3, random_state=45)
+pca=PCA(n_components=5, random_state=45)
 pca_feat = pca.fit_transform(data_pca)
 pca_feat_names = [f"PC{i}" for i in range(pca.n_components_)]
 pca_df = pd.DataFrame(pca_feat, index=data_pca.index, columns=pca_feat_names)  # remember index=df_pca.index
@@ -1763,6 +1758,21 @@ pca_df
 ```python
 data_pca = pd.concat([data_pca, pca_df], axis=1)
 data_pca.head()
+```
+
+```python
+pca_metrics=pd.DataFrame(
+    {"Eigenvalue": pca.explained_variance_,
+     "Difference": np.insert(np.diff(pca.explained_variance_), 0, 0),
+     "Proportion": pca.explained_variance_ratio_,
+     "Cumulative": np.cumsum(pca.explained_variance_ratio_)},
+    index=range(1, pca.n_components_ + 1)
+)
+pca_metrics['Proportion'].plot(kind='bar')
+plt.xlabel('PCA')
+plt.xticks(ticks=[0,1,2,3,4],labels=[0,1,2,3,4])
+plt.ylabel('Variance Explained')
+plt.show()
 ```
 
 ```python
@@ -1781,7 +1791,7 @@ loadings.style.applymap(_color_red_or_green)
 ```
 
 ```python
-principal_components = ['PC0', 'PC1', 'PC2']
+principal_components = ['PC0', 'PC1', 'PC2','PC4']
 ```
 
 ```python
@@ -1799,7 +1809,7 @@ plt.show()
 ```
 
 ```python
-kmeans=KMeans(n_clusters=4, random_state=45).fit(data_pca[principal_components])
+kmeans=KMeans(n_clusters=5, random_state=45).fit(data_pca[principal_components])
 clusters_PCA=pd.DataFrame(kmeans.cluster_centers_, columns=principal_components)
 ```
 
@@ -1809,10 +1819,6 @@ labels=kmeans.predict(data_pca[principal_components])
 
 ```python
 data_pca['PCA_Clusters']=labels
-```
-
-```python
-
 ```
 
 ```python
@@ -1828,7 +1834,90 @@ r2_calc_label(data_pca, data_pca[principal_components].columns, label='PCA_Clust
 ```
 
 ```python
-cluster_profiles(data_pca,[principal_components],['PCA_Clusters'],(28,10))
+cluster_profiles(data_pca,[value_kept],['PCA_Clusters'],(28,10))
+```
+
+PC0: Quanto maior PC0, Menos doações e menos Frequencia <br>
+PC1: Quanto maior PC1, Mais Valor doado total e mais valor medio por doacao <br>
+PC2: QUANTO MAIOR PC2, maior o valor medio por doaçao menor o intervalo entre doacoes e doacao maxima feitas há menos tempo <br>
+PC4: QUANTO MAIOR, menor o numero de promocoes recebidas, menor o intervalo entre doacoes e maxima doação feita há mais tempo
+
+
+Azul: Mais dias por doacao, RFA baixo (LAPSING!!!!!)
+Vermelho: 2º montante medio mais alto, mas total doado é o mais baixo, dias por doacao é o melhor e a melhor doacao foi há menos tempo (Dador Novos) 
+Verde: Mais tempo desde a melhor doacao, doa muito a outras instituicoes
+Amarelo:most Frequent Donors, lowest value donations
+Roxo: BEST donors
+
+```python
+centroids_PCA=pd.DataFrame(scaler.inverse_transform(data_pca.groupby('PCA_Clusters')[value_kept].mean() ),columns=value_kept)
+centroids_PCA
+```
+
+# Outliers Prediction
+
+```python
+value_out=data[~filters]
+```
+
+```python
+test=value_out[value_kept]
+
+scaler = StandardScaler()
+scaled_feat = scaler.fit_transform(test[value_kept])
+scaled_feat
+
+test[value_kept] = scaled_feat
+```
+
+```python
+test
+```
+
+```python
+y=data_pca['PCA_Clusters']
+X=data_pca[value_kept]
+X_train, X_val, y_train, y_val=train_test_split(X,
+                                                y,
+                                                stratify=y, 
+                                                test_size=0.25, 
+                                                random_state=10)
+```
+
+```python
+dt=DecisionTreeClassifier(random_state=10)
+
+dt.fit(X_train,y_train)
+
+y_train_pred=dt.predict(X_train)
+y_pred=dt.predict(X_val)
+
+print(classification_report(y_train,y_train_pred))
+print(classification_report(y_val,y_pred))
+```
+
+```python
+test['PCA_Clusters']=dt.predict(test)
+```
+
+```python
+test['PCA_Clusters'].value_counts()
+```
+
+```python
+value_labels=pd.concat([data_pca,test], )
+```
+
+```python
+value_labels
+```
+
+```python
+data
+```
+
+```python
+data=data.join(value_labels['PCA_Clusters'], how='left')
 ```
 
 # T-SNE
@@ -1894,9 +1983,9 @@ numerical
 data_minmax=data.copy()
 
 scaler = MinMaxScaler()
-scaled_feat = scaler.fit_transform(data_minmax[final_keep])
+scaled_feat = scaler.fit_transform(data_minmax[numerical])
 
-data_minmax[final_keep] = scaled_feat
+data_minmax[numerical] = scaled_feat
 data_minmax.head()
 ```
 
@@ -1956,14 +2045,18 @@ cluster_profiles(data_std, [demography_kept], ['demography_KPrototypes'], (20,5)
 cluster_profiles(data_std, [value_kept], ['value_Kmeans'], (20,5))
 ```
 
+```python
+cluster_profiles(data_std, [value_kept], ['PCA_Clusters'], (20,5))
+```
+
 # Contingency Tables
 
 ```python
-data.groupby(['value_Kmeans','demography_KPrototypes',  ])\
+data.groupby(['Preferences_KModes','demography_KPrototypes'])\
 .size()\
 .to_frame()\
 .reset_index()\
-.pivot('value_Kmeans','demography_KPrototypes' , 0)
+.pivot('Preferences_KModes','demography_KPrototypes' , 0)
 ```
 
 ## Cluster Merging First Round
@@ -1971,7 +2064,7 @@ data.groupby(['value_Kmeans','demography_KPrototypes',  ])\
 ```python
 # Clusters with low frequency to be merged:
 to_merge = [(2,1), (1,1)]
-df_centroids = data_std.groupby(['value_Kmeans','demography_KPrototypes'])\
+df_centroids = data_std.groupby(['Preferences_KModes','demography_KPrototypes'])\
     [final_keep].mean()
 
 # Computing the euclidean distance matrix between the centroids
@@ -1991,15 +2084,15 @@ source_target
 
 ```python
 for source, target in source_target.items():
-    mask = (data['value_Kmeans']==source[0]) & (data['demography_KPrototypes']==source[1])
-    data.loc[mask, 'value_Kmeans'] = target[0]
+    mask = (data['Preferences_KModes']==source[0]) & (data['demography_KPrototypes']==source[1])
+    data.loc[mask, 'Preferences_KModes'] = target[0]
     data.loc[mask, 'demography_KPrototypes'] = target[1]# New contigency table
     
-data.groupby(['value_Kmeans','demography_KPrototypes'])\
+data.groupby(['Preferences_KModes','demography_KPrototypes'])\
     .size()\
     .to_frame()\
     .reset_index()\
-    .pivot('value_Kmeans','demography_KPrototypes', 0)
+    .pivot('Preferences_KModes','demography_KPrototypes', 0)
 ```
 
 ```python
@@ -2028,7 +2121,7 @@ data_ = data.copy()
 # Mapping the hierarchical clusters on the centroids to the observations
 data_['merged_labels'] = data_.apply(
     lambda row: cluster_mapper[
-        (row['value_Kmeans'], row['demography_KPrototypes'])
+        (row['Preferences_KModes'], row['demography_KPrototypes'])
     ], axis=1
 )
 
@@ -2042,24 +2135,24 @@ data_.groupby('merged_labels').mean()[final_keep]
 data_std=data_.copy()
 
 scaler = StandardScaler()
-scaled_feat = scaler.fit_transform(data_std[final_keep])
+scaled_feat = scaler.fit_transform(data_std[numerical])
 
-data_std[final_keep] = scaled_feat
+data_std[numerical] = scaled_feat
 data_std.head()
 ```
 
 ```python
-data_.groupby(['Preferences_KModes','merged_labels'])\
+data_.groupby(['value_Kmeans','merged_labels'])\
 .size()\
 .to_frame()\
 .reset_index()\
-.pivot('Preferences_KModes','merged_labels' , 0)
+.pivot('value_Kmeans','merged_labels' , 0)
 ```
 
 ```python
 # Clusters with low frequency to be merged:
-to_merge = [(1,0), (2,0), (0,4), (1,4), (2,4), (2,3), (1,3), (2,3)]
-df_centroids = data_std.groupby(['Preferences_KModes','merged_labels'])\
+to_merge = [(1,0), (2,0), (3,2), (3,0)]
+df_centroids = data_std.groupby(['value_Kmeans','merged_labels'])\
     [final_keep].mean()
 
 # Computing the euclidean distance matrix between the centroids
@@ -2079,15 +2172,15 @@ source_target
 
 ```python
 for source, target in source_target.items():
-    mask = (data_['Preferences_KModes']==source[0]) & (data_['merged_labels']==source[1])
-    data_.loc[mask, 'Preferences_KModes'] = target[0]
+    mask = (data_['value_Kmeans']==source[0]) & (data_['merged_labels']==source[1])
+    data_.loc[mask, 'value_Kmeans'] = target[0]
     data_.loc[mask, 'merged_labels'] = target[1]# New contigency table
     
-data_.groupby(['Preferences_KModes','merged_labels'])\
+data_.groupby(['value_Kmeans','merged_labels'])\
     .size()\
     .to_frame()\
     .reset_index()\
-    .pivot('Preferences_KModes','merged_labels', 0)
+    .pivot('value_Kmeans','merged_labels', 0)
 ```
 
 ```python
@@ -2115,7 +2208,7 @@ cluster_mapper = df_centroids['hclust_labels'].to_dict()
 # Mapping the hierarchical clusters on the centroids to the observations
 data_['final_labels'] = data_.apply(
     lambda row: cluster_mapper[
-        (row['Preferences_KModes'], row['merged_labels'])
+        (row['value_Kmeans'], row['merged_labels'])
     ], axis=1
 )
 
@@ -2162,12 +2255,5 @@ cluster_profiles(data_std, [value_kept], ['final_labels'], figsize=(28,10))
 ```
 
 ```python
-data_.groupby('final_labels').mean()['is_male']
-```
 
-```python
-sns.set_style(style="darkgrid")
-gender=data['is_male'].map(lambda x: 'U' if x==" " else x)
-perc_gender=round(gender.value_counts()/len(data['is_male'])*100, 2)
-perc_gender.plot(kind='pie', colors=['fuchsia','royalblue','forestgreen','black'])
 ```
