@@ -1959,7 +1959,7 @@ cluster_profiles(data_std, [value_kept], ['value_Kmeans'], (20,5))
 # Contingency Tables
 
 ```python
-data.groupby(['preferences_KModes','demography_KPrototypes',  ])\
+data.groupby(['value_Kmeans','demography_KPrototypes',  ])\
 .size()\
 .to_frame()\
 .reset_index()\
@@ -1970,12 +1970,12 @@ data.groupby(['preferences_KModes','demography_KPrototypes',  ])\
 
 ```python
 # Clusters with low frequency to be merged:
-to_merge = [(2,1), (1,1), (3,1), (3,2)]
+to_merge = [(2,1), (1,1)]
 df_centroids = data_std.groupby(['value_Kmeans','demography_KPrototypes'])\
     [final_keep].mean()
 
 # Computing the euclidean distance matrix between the centroids
-euclidean = pairwise_distances(df_centroids[numerical])
+euclidean = pairwise_distances(df_centroids)
 df_dists = pd.DataFrame(
     euclidean, columns=df_centroids.index, index=df_centroids.index
 )
@@ -2003,7 +2003,7 @@ data.groupby(['value_Kmeans','demography_KPrototypes'])\
 ```
 
 ```python
-generate_dendrogram(df_centroids[numerical], 'ward')
+generate_dendrogram(df_centroids, 'ward')
 ```
 
 ```python
@@ -2011,9 +2011,9 @@ generate_dendrogram(df_centroids[numerical], 'ward')
 hclust = AgglomerativeClustering(
     linkage='ward', 
     affinity='euclidean', 
-    n_clusters=4
+    n_clusters=6
 )
-hclust_labels = hclust.fit_predict(df_centroids[numerical])
+hclust_labels = hclust.fit_predict(df_centroids)
 df_centroids['hclust_labels'] = hclust_labels
 
 df_centroids
@@ -2058,12 +2058,12 @@ data_.groupby(['Preferences_KModes','merged_labels'])\
 
 ```python
 # Clusters with low frequency to be merged:
-to_merge = [(1,0), (2,0), (1,2), (2,2)]
+to_merge = [(1,0), (2,0), (0,4), (1,4), (2,4), (2,3), (1,3), (2,3)]
 df_centroids = data_std.groupby(['Preferences_KModes','merged_labels'])\
     [final_keep].mean()
 
 # Computing the euclidean distance matrix between the centroids
-euclidean = pairwise_distances(df_centroids[numerical])
+euclidean = pairwise_distances(df_centroids)
 df_dists = pd.DataFrame(
     euclidean, columns=df_centroids.index, index=df_centroids.index
 )
@@ -2091,7 +2091,7 @@ data_.groupby(['Preferences_KModes','merged_labels'])\
 ```
 
 ```python
-generate_dendrogram(df_centroids[numerical], 'ward')
+generate_dendrogram(df_centroids, 'ward')
 ```
 
 ```python
@@ -2101,7 +2101,7 @@ hclust = AgglomerativeClustering(
     affinity='euclidean', 
     n_clusters=4
 )
-hclust_labels = hclust.fit_predict(df_centroids[numerical])
+hclust_labels = hclust.fit_predict(df_centroids)
 df_centroids['hclust_labels'] = hclust_labels
 
 df_centroids
@@ -2154,7 +2154,7 @@ cluster_profiles(data, [preferences_kept], ['final_labels'], figsize=(28,10))
 ```
 
 ```python
-cluster_profiles(data_std, [demography_kept], ['final_labels'], figsize=(28,10))
+cluster_profiles(data_minmax, [demography_kept], ['final_labels'], figsize=(28,10))
 ```
 
 ```python
