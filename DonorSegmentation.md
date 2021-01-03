@@ -670,7 +670,7 @@ sns.heatmap(data=corr, annot=annot, cmap=sns.diverging_palette(220, 10, as_cmap=
             fmt='s', vmin=-1, vmax=1, center=0, square=True, linewidths=.5)
 # Layout
 fig.subplots_adjust(top=0.95)
-fig.suptitle("Correlation Matrix", fontsize=20)
+fig.suptitle("Correlation Matrix Demographics", fontsize=20)
 plt.show()
 ```
 
@@ -865,11 +865,6 @@ clusters = kproto.fit_predict(demo_no_out_minmax[demography_kept], categorical=c
 
 ```python
 demo_no_out_minmax['demography_KPrototypes'] = clusters
-```
-
-```python
-plot = ['is_male', 'PERCMINORITY','IC1', 'URB_LVL_S',
-       'URB_LVL_R', 'URB_LVL_C', 'URB_LVL_T']
 ```
 
 ```python
@@ -1406,10 +1401,6 @@ data
 data=data.join(value_labels['value_Kmeans'], how='left')
 ```
 
-```python
-
-```
-
 ## Hierarchical Clustering on Top of K-Means
 
 
@@ -1843,7 +1834,7 @@ r2_calc_label(data_pca, data_pca[principal_components].columns, label='PCA_Clust
 ```
 
 ```python
-cluster_profiles(data_pca,[principal_components],['PCA_Clusters'],(28,10))
+cluster_profiles(data_pca,[value_kept],['PCA_Clusters'],(28,10))
 ```
 
 PC0: Quanto maior PC0, Menos doações e menos Frequencia <br>
@@ -1851,25 +1842,82 @@ PC1: Quanto maior PC1, Mais Valor doado total e mais valor medio por doacao <br>
 PC2: QUANTO MAIOR PC2, maior o valor medio por doaçao menor o intervalo entre doacoes e doacao maxima feitas há menos tempo <br>
 PC4: QUANTO MAIOR, menor o numero de promocoes recebidas, menor o intervalo entre doacoes e maxima doação feita há mais tempo
 
+
+Azul: Mais dias por doacao, RFA baixo (LAPSING!!!!!)
+Vermelho: 2º montante medio mais alto, mas total doado é o mais baixo, dias por doacao é o melhor e a melhor doacao foi há menos tempo (Dador Novos) 
+Verde: Mais tempo desde a melhor doacao, doa muito a outras instituicoes
+Amarelo:most Frequent Donors, lowest value donations
+Roxo: BEST donors
+
 ```python
-Azul: - Doações, - Menos Freq, AVG Valor doado Total e - Valor por Doação, + tempo Doacao Max
-Vermelho:- Doações, Avg Menos Freq, +Valor doado Total, + Valor por Doação
-Verde
-Amarelo
-Roxo
+centroids_PCA=pd.DataFrame(scaler.inverse_transform(data_pca.groupby('PCA_Clusters')[value_kept].mean() ),columns=value_kept)
+centroids_PCA
+```
+
+# Outliers Prediction
+
+```python
+value_out=data[~filters]
 ```
 
 ```python
-data_pca.groupby('PCA_Clusters')[value_kept].mean()
-data_pca[value_kept]
+test=value_out[value_kept]
+
+scaler = StandardScaler()
+scaled_feat = scaler.fit_transform(test[value_kept])
+scaled_feat
+
+test[value_kept] = scaled_feat
 ```
 
 ```python
-r2_calc_label(data_pca, data_pca[principal_components].columns, label='PCA_Clusters')
+test
 ```
 
 ```python
-cluster_profiles(data_pca,[principal_components],['PCA_Clusters'],(28,10))
+y=data_pca['PCA_Clusters']
+X=data_pca[value_kept]
+X_train, X_val, y_train, y_val=train_test_split(X,
+                                                y,
+                                                stratify=y, 
+                                                test_size=0.25, 
+                                                random_state=10)
+```
+
+```python
+dt=DecisionTreeClassifier(random_state=10)
+
+dt.fit(X_train,y_train)
+
+y_train_pred=dt.predict(X_train)
+y_pred=dt.predict(X_val)
+
+print(classification_report(y_train,y_train_pred))
+print(classification_report(y_val,y_pred))
+```
+
+```python
+test['PCA_Clusters']=dt.predict(test)
+```
+
+```python
+test['PCA_Clusters'].value_counts()
+```
+
+```python
+value_labels=pd.concat([data_pca,test], )
+```
+
+```python
+value_labels
+```
+
+```python
+data
+```
+
+```python
+data=data.join(value_labels['PCA_Clusters'], how='left')
 ```
 
 # T-SNE
@@ -1997,6 +2045,10 @@ cluster_profiles(data_std, [demography_kept], ['demography_KPrototypes'], (20,5)
 cluster_profiles(data_std, [value_kept], ['value_Kmeans'], (20,5))
 ```
 
+```python
+cluster_profiles(data_std, [value_kept], ['PCA_Clusters'], (20,5))
+```
+
 # Contingency Tables
 
 ```python
@@ -2016,7 +2068,7 @@ df_centroids = data_std.groupby(['Preferences_KModes','demography_KPrototypes'])
     [final_keep].mean()
 
 # Computing the euclidean distance matrix between the centroids
-euclidean = pairwise_distances(df_centroids[numerical])
+euclidean = pairwise_distances(df_centroids)
 df_dists = pd.DataFrame(
     euclidean, columns=df_centroids.index, index=df_centroids.index
 )
@@ -2044,7 +2096,10 @@ data.groupby(['Preferences_KModes','demography_KPrototypes'])\
 ```
 
 ```python
-generate_dendrogram(df_centroids[numerical], 'ward')
+link = linkage(df_centroids, method='ward')
+dendo = dendrogram(link, color_threshold=7.1)
+plt.axhline(7.1, linestyle='--')
+plt.show()
 ```
 
 ```python
@@ -2054,7 +2109,7 @@ hclust = AgglomerativeClustering(
     affinity='euclidean', 
     n_clusters=4
 )
-hclust_labels = hclust.fit_predict(df_centroids[numerical])
+hclust_labels = hclust.fit_predict(df_centroids)
 df_centroids['hclust_labels'] = hclust_labels
 
 df_centroids
@@ -2104,7 +2159,7 @@ df_centroids = data_std.groupby(['value_Kmeans','merged_labels'])\
     [final_keep].mean()
 
 # Computing the euclidean distance matrix between the centroids
-euclidean = pairwise_distances(df_centroids[numerical])
+euclidean = pairwise_distances(df_centroids)
 df_dists = pd.DataFrame(
     euclidean, columns=df_centroids.index, index=df_centroids.index
 )
@@ -2132,7 +2187,7 @@ data_.groupby(['value_Kmeans','merged_labels'])\
 ```
 
 ```python
-generate_dendrogram(df_centroids[numerical], 'ward')
+generate_dendrogram(df_centroids, 'ward')
 ```
 
 ```python
@@ -2142,7 +2197,7 @@ hclust = AgglomerativeClustering(
     affinity='euclidean', 
     n_clusters=4
 )
-hclust_labels = hclust.fit_predict(df_centroids[numerical])
+hclust_labels = hclust.fit_predict(df_centroids)
 df_centroids['hclust_labels'] = hclust_labels
 
 df_centroids
@@ -2203,4 +2258,5 @@ cluster_profiles(data_std, [value_kept], ['final_labels'], figsize=(28,10))
 ```
 
 ```python
+
 ```
