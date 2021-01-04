@@ -288,7 +288,7 @@ def generate_box_plots(df, title='Box Plots'):
 ```
 
 ```python
-def generate_silhouette_plots(df, clusterer, range_clusters, cluster_labels = None):
+def generate_silhouette_plots(df, clusterer, range_clusters):
     # Adapted from:
     # https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis
 
@@ -298,9 +298,8 @@ def generate_silhouette_plots(df, clusterer, range_clusters, cluster_labels = No
         # Create a figure
         fig = plt.figure(figsize=(13, 7))
 
-        if (cluster_labels == None):
-            curr_clusterer = clone(clusterer).set_params(n_clusters=nclus)
-            cluster_labels = curr_clusterer.fit_predict(data[preferences])
+        curr_clusterer = clone(clusterer).set_params(n_clusters=nclus)
+        cluster_labels = curr_clusterer.fit_predict(data[preferences])
 
         # The silhouette_score gives the average value for all the samples.
         # This gives a perspective into the density and separation of the formed clusters
@@ -357,7 +356,6 @@ def generate_silhouette_plots(df, clusterer, range_clusters, cluster_labels = No
 
         plt.yticks([])  # Clear the yaxis labels / ticks
         plt.xticks(np.arange(xmin, xmax, 0.1))
-        return avg_silhouette
 ```
 
 ```python
@@ -705,9 +703,9 @@ categorical_columns = [8, 9, 10, 11]
 
 ```python
 costs=[]
-k=range(2, 10)
+k=range(2, 6)
 for i in k:
-        kproto=KPrototypes(n_clusters=i, random_state=45).fit(demo_no_out_std[plot], categorical=categorical_columns)
+        kproto=KPrototypes(n_clusters=i, random_state=45).fit(demo_no_out_std[demography_kept], categorical=categorical_columns)
         costs.append(kproto.cost_)
         
 plt.plot(k, costs, 'bx-')
@@ -747,8 +745,8 @@ test[numerical] = scaled_feat
 ```
 
 ```python
-y=demo_no_out_minmax['demography_KPrototypes']
-X=demo_no_out_minmax[demography_kept]
+y=demo_no_out_std['demography_KPrototypes']
+X=demo_no_out_std[demography_kept]
 X_train, X_val, y_train, y_val=train_test_split(X,
                                                 y,
                                                 stratify=y, 
@@ -773,7 +771,7 @@ test['demography_KPrototypes']=dt.predict(test)
 ```
 
 ```python
-demo_labels=pd.concat([demo_no_out_minmax,test], )
+demo_labels=pd.concat([demo_no_out_std,test], )
 data=data.join(demo_labels['demography_KPrototypes'], how='left')
 ```
 
@@ -781,9 +779,12 @@ data=data.join(demo_labels['demography_KPrototypes'], how='left')
 
 ```python
 # This is step can be quite time consuming
-two_dim = TSNE(random_state=42).fit_transform(demo_no_out_minmax[demography_kept])
+two_dim = TSNE(random_state=42).fit_transform(demo_no_out_std[demography_kept])
+```
+
+```python
 # t-SNE visualization
-pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=demo_no_out_minmax['Demography_Kmeans'], colormap='tab10', figsize=(15,10))
+pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=demo_no_out_std['demography_KPrototypes'], colormap='tab10', figsize=(15,10))
 plt.show()
 ```
 
@@ -1737,8 +1738,4 @@ cluster_profiles(data_minmax, [demography_kept], ['final_labels'], figsize=(28,1
 
 ```python
 cluster_profiles(data_std, [value_kept], ['final_labels'], figsize=(28,10))
-```
-
-```python
-
 ```
