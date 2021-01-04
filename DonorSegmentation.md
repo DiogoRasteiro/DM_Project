@@ -31,6 +31,7 @@ from datetime import datetime
 # Plotting libraries
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import umap
 from sklearn.manifold import TSNE
 
@@ -276,19 +277,20 @@ def generate_histograms(df, title='Histograms'):
 ```python
 def generate_box_plots(df, title='Box Plots'):
     # Prepare figure. Create individual axes where each box plot will be placed
-    fig, axes = plt.subplots(2, math.ceil(len(df.columns) / 2), figsize=(20, 11))
+    fig, axes = plt.subplots(2, math.ceil(len(df.columns) / 2), figsize=(30, 15))
     
     # Iterate across axes objects and associate each box plot 
     for ax, feat in zip(axes.flatten(), df.columns): 
-        sns.boxplot(data=df, x=feat, ax=ax)
-        
+        sns.boxplot(data=df, y=feat, orient='v', ax=ax)
+        plt.ylabel(ylabel='' )
+        plt.xlabel(xlabel=feat)
     # Add a centered title to the figure:
     plt.suptitle(title)
     plt.show()
 ```
 
 ```python
-def generate_silhouette_plots(df, clusterer, range_clusters):
+def generate_silhouette_plots(df, perspective, clusterer, range_clusters):
     # Adapted from:
     # https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis
 
@@ -299,11 +301,11 @@ def generate_silhouette_plots(df, clusterer, range_clusters):
         fig = plt.figure(figsize=(13, 7))
 
         curr_clusterer = clone(clusterer).set_params(n_clusters=nclus)
-        cluster_labels = curr_clusterer.fit_predict(data[preferences])
+        cluster_labels = curr_clusterer.fit_predict(df[perspective])
 
         # The silhouette_score gives the average value for all the samples.
         # This gives a perspective into the density and separation of the formed clusters
-        silhouette_avg = silhouette_score(data[preferences], cluster_labels)
+        silhouette_avg = silhouette_score(df[perspective], cluster_labels)
         avg_silhouette.append(silhouette_avg)
         print(
             f"For n_clusters = {nclus}, the average silhouette_score is : {silhouette_avg}"
@@ -352,7 +354,7 @@ def generate_silhouette_plots(df, clusterer, range_clusters):
 
         # The (nclus+1)*10 is for inserting blank space between silhouette
         # plots of individual clusters, to demarcate them clearly.
-        plt.ylim([0, len(data[preferences]) + (nclus + 1) * 10])
+        plt.ylim([0, len(df[perspective]) + (nclus + 1) * 10])
 
         plt.yticks([])  # Clear the yaxis labels / ticks
         plt.xticks(np.arange(xmin, xmax, 0.1))
@@ -503,6 +505,40 @@ def plot_umap(df):
     plt.show()
 ```
 
+```python
+def label_cluster_preferences(label):
+    if(label==0):
+        return "No Preferences"
+    elif(label==1):
+        return "Pets & Gardening"
+    elif(label==2):
+        return 'Veteran Lovers'
+```
+
+```python
+def label_cluster_demography(label):
+    if(label==0):
+        return "High Income Families"
+    elif(label==1):
+        return "Military and Government Families"
+    elif(label==2):
+        return 'Low Income and Minority Families'
+    elif(label==3):
+        return 'Rural Average Families'
+```
+
+```python
+def label_cluster_value(label):
+    if(label==0):
+        return "Average Donors"
+    elif(label==1):
+        return "High Potential Donors"
+    elif(label==2):
+        return 'Active Low-spending Donors'
+    elif(label==3):
+        return 'High Value Donors'
+```
+
 # Preferences
 
 
@@ -570,22 +606,6 @@ data[demography]
 ```python
 binary_cols=data[demography].apply(lambda x: max(x)==1, 0)
 binary_cols=data[demography].loc[:, binary_cols].columns
-```
-
-```python
-# All Numeric Variables' Box Plots in one figure
-sns.set()
-# Prepare figure. Create individual axes where each box plot will be placed
-fig, axes = plt.subplots(4, int(len(binary_cols) / 4), figsize=(20, 20))
-# Plot data# Iterate across axes objects and associate each box plot (hint: use the ax argument):
-for ax, feat in zip(axes.flatten(), binary_cols): 
-# Notice the zip() function and flatten() method
-    sns.countplot(x=data[feat], ax=ax)
-# Layout# Add a centered title to the figure:
-title = "Preferences Vars"
-plt.suptitle(title)
-        
-plt.show()
 ```
 
 ```python
@@ -911,16 +931,11 @@ df_standard['value_Kmeans'] = kmeans.labels_
 ```
 
 ```python
-Kmeans = KMeans(random_state=45)
-get_r2_scores(df_standard[value_kept], Kmeans)
-```
-
-```python
 df_standard['value_Kmeans'].value_counts()
 ```
 
 ```python
-silhouette_value_kmeans = generate_silhouette_plots(df_standard[value_kept], KMeans(random_state=45), range_clusters=[3,4])
+silhouette_value_kmeans = generate_silhouette_plots(df_standard,value_kept, KMeans(random_state=45), range_clusters=[3,4])
 ```
 
 ```python
@@ -1075,7 +1090,7 @@ r2_value_k_hc = r2_calc_label(KMeans_HC,value_kept,label='value_K_Hierarchical')
 ```
 
 ```python
-silhouette_value_k_hc = generate_silhouette_plots(KMeans_HC[value_kept], HC, [3,4])
+silhouette_value_k_hc = generate_silhouette_plots(KMeans_HC, value_kept, HC, [3,4])
 ```
 
 # SOM
@@ -1171,7 +1186,7 @@ r2_value_ksom = r2_calc_label(cent_k_som, value_kept, 'label')
 ```
 
 ```python
-silhoutte_value_ksom = generate_silhouette_plots(cent_k_som, kmeans,[3,4] cent_k_som['label'])
+silhoutte_value_ksom = generate_silhouette_plots(cent_k_som, value_kept, kmeans,[3,4])
 ```
 
 # Hierarchical Clustering on top of SOM
@@ -1231,7 +1246,7 @@ r2_value_ hcsom = r2_calc_label(cent_hc_som, value_kept, 'label')
 ```
 
 ```python
-silhoutte_value_ksom = generate_silhouette_plots(cent_hc_som, hierclust ,[2,3] cent_hc_som['label'])
+silhoutte_value_ksom = generate_silhouette_plots(cent_hc_som, value_kept, hierclust ,[2,3])
 ```
 
 # K Means on top of Principal Components Analysis
@@ -1306,7 +1321,7 @@ principal_components = ['PC0', 'PC1', 'PC2','PC4']
 ```
 
 ```python
-plot_inertia(data_pca[principal_components, KMeans, 2, 10])
+plot_inertia(data_pca[principal_components], KMeans, 2, 10)
 ```
 
 ```python
@@ -1352,7 +1367,7 @@ centroids_PCA
 ```
 
 ```python
-silhoutte_value_ksom = generate_silhouette_plots(data_pca, kmeans, [3,4])
+silhoutte_value_pca = generate_silhouette_plots(data_pca, value_kept, kmeans, [4,5])
 ```
 
 # Outliers Prediction
@@ -1415,7 +1430,15 @@ data=data.join(value_labels['PCA_Clusters'], how='left')
 # This is step can be quite time consuming
 two_dim = TSNE(random_state=42).fit_transform(df_standard[value_kept])
 # t-SNE visualization
-pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=df_outliers2['value_Kmeans'], colormap='tab10', figsize=(15,10))
+pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=df_standard['value_Kmeans'], colormap='tab10', figsize=(15,10))
+plt.show()
+```
+
+```python
+# This is step can be quite time consuming
+two_dim = TSNE(random_state=42).fit_transform(data_pca[value_kept])
+# t-SNE visualization
+pd.DataFrame(two_dim).plot.scatter(x=0, y=1, c=data_pca['PCA_Clusters'], colormap='tab10', figsize=(15,10))
 plt.show()
 ```
 
@@ -1426,8 +1449,8 @@ plt.show()
 ```
 
 ```python
-data = pd.read_csv('data/data_labels.csv', index_col='CONTROLN')
-data.head()
+#data = pd.read_csv('data/data_labels.csv', index_col='CONTROLN')
+#data.head()
 ```
 
 ```python
@@ -1483,40 +1506,6 @@ scaled_feat = scaler.fit_transform(data_std[numerical])
 
 data_std[numerical] = scaled_feat
 data_std.head()
-```
-
-```python
-def label_cluster_preferences(label):
-    if(label==0):
-        return "No Preferences"
-    elif(label==1):
-        return "Pets & Gardening"
-    elif(label==2):
-        return 'Veteran Lovers'
-```
-
-```python
-def label_cluster_demography(label):
-    if(label==0):
-        return "High Income Families"
-    elif(label==1):
-        return "Military and Government Families"
-    elif(label==2):
-        return 'Low Income and Minority Families'
-    elif(label==3):
-        return 'Rural Average Families'
-```
-
-```python
-def label_cluster_value(label):
-    if(label==0):
-        return "Average Donors"
-    elif(label==1):
-        return "High Potential Donors"
-    elif(label==2):
-        return 'Active Low-spending Donors'
-    elif(label==3):
-        return 'High Value Donors'
 ```
 
 ```python
