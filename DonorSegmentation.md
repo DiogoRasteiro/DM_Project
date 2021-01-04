@@ -44,7 +44,7 @@ from kmodes.kmodes import KModes
 from kmodes.kprototypes import KPrototypes
 
 # Clustering Utilities
-from sklearn.metrics import silhouette_samples, silhouette_score
+from sklearn.metrics import silhouette_samples, silhouette_score, pairwise_distances
 from sklearn.decomposition import PCA
 from sompy.visualization.mapview import View2D
 from sompy.visualization.bmuhits import BmuHitsView
@@ -393,8 +393,8 @@ def generate_hc_methods_plot(df):
 ```python
 def generate_dendrogram(df, hc_method, y=0):
     link = linkage(df, method=hc_method)
-    dendo = dendrogram(link, color_threshold=7.1)
-    plt.axhline(0, linestyle='--')
+    dendo = dendrogram(link, color_threshold=y)
+    plt.axhline(y, linestyle='--')
     plt.show()
 ```
 
@@ -518,25 +518,27 @@ def label_cluster_preferences(label):
 ```python
 def label_cluster_demography(label):
     if(label==0):
-        return "High Income Families"
+        return "High Income"
     elif(label==1):
-        return "Military and Government Families"
+        return "Military and Government"
     elif(label==2):
-        return 'Low Income and Minority Families'
+        return 'Low Income and Minority'
     elif(label==3):
-        return 'Rural Average Families'
+        return 'Rural Average'
 ```
 
 ```python
 def label_cluster_value(label):
     if(label==0):
-        return "Average Donors"
+        return "Donors that lost interest"
     elif(label==1):
-        return "High Potential Donors"
+        return "Active Low-spending Donors"
     elif(label==2):
-        return 'Active Low-spending Donors'
+        return 'More Inactive Donors'
     elif(label==3):
         return 'High Value Donors'
+    elif(label==4):
+        return 'Newer Donors'
 ```
 
 # Preferences
@@ -947,60 +949,6 @@ r2_value_kmeans = r2_calc_label(df_standard,value_kept,label='value_Kmeans')
 r2_value_kmeans
 ```
 
-# Outliers Prediction
-
-```python
-value_out=data[~filters]
-```
-
-```python
-test=value_out[value_kept]
-
-scaler = StandardScaler()
-scaled_feat = scaler.fit_transform(test[value_kept])
-scaled_feat
-
-test[value_kept] = scaled_feat
-```
-
-```python
-y=df_standard['value_Kmeans']
-X=df_standard[value_kept]
-X_train, X_val, y_train, y_val=train_test_split(X,
-                                                y,
-                                                stratify=y, 
-                                                test_size=0.25, 
-                                                random_state=10)
-```
-
-```python
-dt=DecisionTreeClassifier(random_state=10)
-
-dt.fit(X_train,y_train)
-
-y_train_pred=dt.predict(X_train)
-y_pred=dt.predict(X_val)
-
-print(classification_report(y_train,y_train_pred))
-print(classification_report(y_val,y_pred))
-```
-
-```python
-test['value_Kmeans']=dt.predict(test)
-```
-
-```python
-test['value_Kmeans'].value_counts()
-```
-
-```python
-value_labels=pd.concat([df_standard,test], )
-```
-
-```python
-data=data.join(value_labels['value_Kmeans'], how='left')
-```
-
 ## Hierarchical Clustering on Top of K-Means
 
 
@@ -1039,7 +987,7 @@ generate_hc_methods_plot(centroids_value)
 ```
 
 ```python
-generate_dendrogram(centroids_value, 'ward')
+generate_dendrogram(centroids_value, 'ward', 70)
 ```
 
 ```python
@@ -1059,7 +1007,7 @@ count_centroids
 
 ```python
 KMeans_HC = clusters_value.merge(labels, how = 'inner', on = 'Centroids')
-KMeans_HC = df_outliers.merge(KMeans_HC[['ID','Cluster']], how = 'inner', left_on = df_outliers.index, right_on = 'ID')
+KMeans_HC = df_standard.merge(KMeans_HC[['ID','Cluster']], how = 'inner', left_on = df_standard.index, right_on = 'ID')
 KMeans_HC.drop(columns = 'ID', inplace = True)
 KMeans_HC.rename(columns = {'Cluster': 'value_K_Hierarchical'}, inplace=True)
 ```
@@ -1100,7 +1048,7 @@ np.random.seed(42)
 
 sm = sompy.SOMFactory().build(
     df_standard[value_kept].values, 
-    mapsize=(10,10),
+    mapsize=(20,20),
     initialization='random', 
     neighborhood='gaussian',
     training='batch',
@@ -1242,7 +1190,7 @@ cent_hc_som['label'].value_counts()
 ```
 
 ```python
-r2_value_ hcsom = r2_calc_label(cent_hc_som, value_kept, 'label')
+r2_value_hcsom = r2_calc_label(cent_hc_som, value_kept, 'label')
 ```
 
 ```python
@@ -1346,6 +1294,24 @@ r2_value_pca = r2_calc_label(data_pca, data_pca[principal_components].columns, l
 ```
 
 ```python
+def label_cluster_value(label):
+    if(label==0):
+        return "Donors that lost interest"
+    elif(label==1):
+        return "Active Low-spending Donors"
+    elif(label==2):
+        return 'More Inactive Donors'
+    elif(label==3):
+        return 'High Value Donors'
+    elif(label==4):
+        return 'Newer Donors'
+```
+
+```python
+data['PCA_Clusters'] = data['PCA_Clusters'].apply(label_cluster_value)
+```
+
+```python
 cluster_profiles(data_pca,[value_kept],['PCA_Clusters'],(28,10))
 ```
 
@@ -1445,7 +1411,7 @@ plt.show()
 # Cluster Analysis
 
 ```python
-# data.to_csv('data/data_labels.csv', index=True)
+#data.to_csv('data/data_labels.csv', index=True)
 ```
 
 ```python
@@ -1517,11 +1483,15 @@ cluster_profiles(data_std, [demography_kept], ['demography_KPrototypes'], (20,5)
 ```
 
 ```python
-cluster_profiles(data_std, [value_kept], ['value_Kmeans'], (20,5))
+cluster_profiles(data_std, [value_kept], ['PCA_Clusters'], (20,5))
 ```
 
 ```python
-cluster_profiles(data_std, [value_kept], ['PCA_Clusters'], (20,5))
+backup = data.copy()
+```
+
+```python
+data = backup.copy()
 ```
 
 # Contingency Tables
@@ -1534,11 +1504,32 @@ data.groupby(['Preferences_KModes','demography_KPrototypes'])\
 .pivot('Preferences_KModes','demography_KPrototypes' , 0)
 ```
 
+```python
+data
+```
+
+```python
+data['PCA_Clusters'] = data['PCA_Clusters'].apply(label_cluster_value)
+```
+
+```python
+data['Preferences_KModes'] = data['Preferences_KModes'].apply(label_cluster_preferences)
+```
+
+```python
+data['demography_KPrototypes'] = data['demography_KPrototypes'].apply(label_cluster_demography)
+```
+
+```python
+pd.crosstab([data.Preferences_KModes, data.demography_KPrototypes], 
+                             data.PCA_Clusters, margins= True)
+```
+
 ## Cluster Merging First Round
 
 ```python
 # Clusters with low frequency to be merged:
-to_merge = [(2,1), (1,1)]
+to_merge = []
 df_centroids = data_std.groupby(['Preferences_KModes','demography_KPrototypes'])\
     [final_keep].mean()
 
@@ -1571,7 +1562,7 @@ data.groupby(['Preferences_KModes','demography_KPrototypes'])\
 ```
 
 ```python
-generate_dendrogram(df_centroids, 'ward')
+generate_dendrogram(df_centroids, 'ward', 3)
 ```
 
 ```python
@@ -1579,7 +1570,7 @@ generate_dendrogram(df_centroids, 'ward')
 hclust = AgglomerativeClustering(
     linkage='ward', 
     affinity='euclidean', 
-    n_clusters=6
+    n_clusters=4
 )
 hclust_labels = hclust.fit_predict(df_centroids)
 df_centroids['hclust_labels'] = hclust_labels
@@ -1617,17 +1608,17 @@ data_std.head()
 ```
 
 ```python
-data_.groupby(['value_Kmeans','merged_labels'])\
+data_.groupby(['PCA_Clusters','merged_labels'])\
 .size()\
 .to_frame()\
 .reset_index()\
-.pivot('value_Kmeans','merged_labels' , 0)
+.pivot('PCA_Clusters','merged_labels' , 0)
 ```
 
 ```python
 # Clusters with low frequency to be merged:
-to_merge = [(1,0), (2,0), (3,2), (3,0)]
-df_centroids = data_std.groupby(['value_Kmeans','merged_labels'])\
+to_merge = [(0,0), (1,0), (2,0), (3,0), (4,0), (3,1)]
+df_centroids = data_std.groupby(['PCA_Clusters','merged_labels'])\
     [final_keep].mean()
 
 # Computing the euclidean distance matrix between the centroids
@@ -1647,19 +1638,19 @@ source_target
 
 ```python
 for source, target in source_target.items():
-    mask = (data_['value_Kmeans']==source[0]) & (data_['merged_labels']==source[1])
-    data_.loc[mask, 'value_Kmeans'] = target[0]
+    mask = (data_['PCA_Clusters']==source[0]) & (data_['merged_labels']==source[1])
+    data_.loc[mask, 'PCA_Clusters'] = target[0]
     data_.loc[mask, 'merged_labels'] = target[1]# New contigency table
     
-data_.groupby(['value_Kmeans','merged_labels'])\
+data_.groupby(['PCA_Clusters','merged_labels'])\
     .size()\
     .to_frame()\
     .reset_index()\
-    .pivot('value_Kmeans','merged_labels', 0)
+    .pivot('PCA_Clusters','merged_labels', 0)
 ```
 
 ```python
-generate_dendrogram(df_centroids, 'ward')
+generate_dendrogram(df_centroids, 'ward', 4.8)
 ```
 
 ```python
@@ -1667,7 +1658,7 @@ generate_dendrogram(df_centroids, 'ward')
 hclust = AgglomerativeClustering(
     linkage='ward', 
     affinity='euclidean', 
-    n_clusters=4
+    n_clusters=5
 )
 hclust_labels = hclust.fit_predict(df_centroids)
 df_centroids['hclust_labels'] = hclust_labels
@@ -1683,7 +1674,7 @@ cluster_mapper = df_centroids['hclust_labels'].to_dict()
 # Mapping the hierarchical clusters on the centroids to the observations
 data_['final_labels'] = data_.apply(
     lambda row: cluster_mapper[
-        (row['value_Kmeans'], row['merged_labels'])
+        (row['PCA_Clusters'], row['merged_labels'])
     ], axis=1
 )
 
